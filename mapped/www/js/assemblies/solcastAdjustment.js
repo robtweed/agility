@@ -71,7 +71,7 @@ export function load() {
             _this.toast.display(json.error);
           }
           if (typeof json.adjustment !== 'undefined') {
-            _this.adjustment.value = json.adjustment;
+              _this.adjustment.value = parseFloat(json.adjustment).toFixed(2);
           }
 
           let cb = _this.autoAdjust.cb;
@@ -147,7 +147,7 @@ export function load() {
               }
               else {
                 contentPage.toast.headerTxt = 'Success!';
-                contentPage.toast.display('Agility will automatically calculate adjustments to your Solcast predictions');
+                contentPage.toast.display('Agility will automatically calculate adjustments to your Solcast predictions from tonight');
               }
             }
             else {
