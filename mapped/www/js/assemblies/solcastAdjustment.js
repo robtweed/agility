@@ -71,7 +71,7 @@ export function load() {
             _this.toast.display(json.error);
           }
           if (typeof json.adjustment !== 'undefined') {
-              _this.adjustment.value = parseFloat(json.adjustment).toFixed(2);
+              _this.adjustment.value = parseFloat(json.adjustment).toFixed(1);
           }
 
           let cb = _this.autoAdjust.cb;
