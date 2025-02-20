@@ -25,7 +25,7 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
- 1 February 2025
+ 19 February 2025
 
 */
 
@@ -142,7 +142,7 @@ let Solcast = class {
     //compare historical solcast original totals with solis historical actual totals
     // and calculate average percentage difference to apply
     // then reset into configuration document
-    
+   
     let count = 0;
     let totalP = 0;
     let totalA = 0;
@@ -312,20 +312,46 @@ let Solcast = class {
     }
     this.predictions.delete();
     let totals = {};
+    let totals_10 = {};
+    let totals_50 = {};
+    let totals_90 = {};
     for (let record of data.forecasts) {
       let d = this.date.at(record.period_end);
       let timeIndex = d.timeIndex;
       let dateIndex = d.dateIndex;
       let kw = +record.pv_estimate;
       let kwh = kw / 2;
+      let pv_10 = +record.pv_estimate10;
+      let pv_10kwh = pv_10 / 2;
+      let pv_50 = +record.pv_estimate;
+      let pv_50kwh = pv_50 / 2;
+      let pv_90 = +record.pv_estimate90;
+      let pv_90kwh = pv_90 / 2;
       if (!totals[dateIndex]) totals[dateIndex] = 0;
       totals[dateIndex] += kwh;
+      if (!totals_10[dateIndex]) totals_10[dateIndex] = 0;
+      totals_10[dateIndex] += pv_10kwh;
+      if (!totals_50[dateIndex]) totals_50[dateIndex] = 0;
+      totals_50[dateIndex] += pv_50kwh;
+      if (!totals_90[dateIndex]) totals_90[dateIndex] = 0;
+      totals_90[dateIndex] += pv_90kwh;
       let tot = totals[dateIndex];
       if (tot > 0) tot = tot.toFixed(4);
+      let tot_10 = totals_10[dateIndex];
+      if (tot_10 > 0) tot_10 = tot_10.toFixed(4);
+      let tot_50 = totals_50[dateIndex];
+      if (tot_50 > 0) tot_50 = tot_50.toFixed(4);
+      let tot_90 = totals_90[dateIndex];
+      if (tot_90 > 0) tot_90 = tot_90.toFixed(4);
       this.predictions.$([dateIndex, timeIndex]).document = {
-        kw: kw,
         kwh: kwh,
+        pv_10kwh: pv_10kwh,
+        pv_50kwh: pv_50kwh,
+        pv_90kwh: pv_90kwh,
         total: tot,
+        total_10: tot_10,
+        total_50: tot_50,
+        total_90: tot_90,
         day: d.dayText,
         time: d.timeText,
         month: d.monthText
@@ -349,8 +375,14 @@ let Solcast = class {
       if (dateIndex > todayDateIndex) {
         _this.totals.$(dateIndex).delete();
         let total = dateNode.lastChild.$('total').value;
+        let total_10 = dateNode.lastChild.$('total_10').value;
+        let total_50 = dateNode.lastChild.$('total_50').value;
+        let total_90 = dateNode.lastChild.$('total_90').value;
         _this.totals.$(dateIndex).document = {
           total: total,
+          total_10: total_10,
+          total_50: total_50,
+          total_90: total_90,
           month: d.monthText,
           day: d.dayText
         }
