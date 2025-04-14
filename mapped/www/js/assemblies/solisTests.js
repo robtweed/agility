@@ -73,7 +73,18 @@ export function load() {
             contentPage.toast.display(json.error);
           }
           let resp = JSON.stringify(json, null, 2);
-          contentPage.testResults.rootElement.innerHTML = `<p>Response:</p><pre>` + resp + `</pre>`;
+	  let resp2 = +json.data.msg;
+	  let resp3 = resp2.toString(2).padStart(16,'0');
+	  let resp4 = ((resp2 & 1) + (resp2 & 64)).toString(2).padStart(16,'0');
+	  let resp5 = 'Mode is <b>UNKNOWN</b>';
+	  if ((resp2 & 1) == 1 && (resp2 & 64) == 0) { resp5 = 'Mode is <b>SELF-USE</b>'; }
+	  if ((resp2 & 64) == 64 && (resp2 & 1) == 0) { resp5 = 'Mode is <b>FEED-IN PRIORITY</b>'; }
+          contentPage.testResults.rootElement.innerHTML = `<p>Response:</p><pre>` + resp + '<br><br>'
+		+ 'Decimal:          ' + resp2 + '<br>'
+		+ 'Solis bits:       ' + resp3 + '<br>'
+		+ 'Bits of interest: ' + resp4 + '<br>'
+		+ resp5 
+		+`</pre>`;
         });
       },
       dataLogger: function() {
