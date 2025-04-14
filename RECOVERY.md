@@ -60,7 +60,7 @@ cd ~/agility
 
 ```console
 cd ~/agility/docker
-./startContainer
+./runContainer
 ```
 
 It will automatically recreate the database and restore the data from the backup
