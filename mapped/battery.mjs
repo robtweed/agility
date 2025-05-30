@@ -25,7 +25,7 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
- 10 April 2025
+ 30 May 2025
 
  */
 
@@ -573,11 +573,13 @@ class Battery {
       data.chargingDecision.reason = 'Unable to calculate battery level, probably due to comms issues';
       return data;
     }
+    /*
     if (data.octopus.priceNow <= 0) {
       data.chargingDecision.charge = 'charge';
       data.chargingDecision.reason = 'Slot price of ' + data.octopus.priceNow + ' is at or below zero';
       return data;
     }
+    */
     if (data.octopus.priceNow <= data.alwaysUsePrice) {
       data.chargingDecision.charge = 'charge';
       data.chargingDecision.reason = 'Slot price of ' + data.octopus.priceNow + ' is at or below Always Use price of ' + data.alwaysUsePrice;
