@@ -989,23 +989,26 @@ class Solis {
     let startDateIndex = key;
     this.data.forEachChildNode({direction: 'reverse', from: startDateIndex}, function(dateNode) {
       offset--;
-      count++;
       //console.log('from = ' + from + '; offset = ' + offset);
       let data = _this.getDataAt(from, offset);
       //console.log(data);
-      let startLoad = data.houseLoadTotal;
-      let startPV = data.pvOutputTotal;
-      data = _this.getDataAt(to, offset);
-      //console.log(data);
-      let endLoad = data.houseLoadTotal;
-      let endPV = data.pvOutputTotal;
-      let totalDayLoad = endLoad - startLoad;
-      let totalDayPV = endPV - startPV;
-      totalLoad += totalDayLoad;
-      totalPV += totalDayPV;
-      //console.log('total for day: ' + totalDayLoad);
+      if (data) {
+        count++;
+        let startLoad = data.houseLoadTotal;
+        let startPV = data.pvOutputTotal;
+        data = _this.getDataAt(to, offset);
+        //console.log(data);
+        let endLoad = data.houseLoadTotal;
+        let endPV = data.pvOutputTotal;
+        let totalDayLoad = endLoad - startLoad;
+        let totalDayPV = endPV - startPV;
+        totalLoad += totalDayLoad;
+        totalPV += totalDayPV;
+        //console.log('total for day: ' + totalDayLoad);
+      }
     });
-    //console.log('grand total: ' + total + '; total days: ' + count);
+    //console.log('grand total: ' + totalLoad + '; total days: ' + count);
+    //console.log('totalPV: ' + totalPV);
     let aveLoad = totalLoad / count;
     let avePV = totalPV / count;
     return {
@@ -1079,15 +1082,25 @@ class Solis {
           totals.push(0);
         }
         this.data.forEachChildNode({direction: 'reverse', from: startDateIndex}, function(dateNode) {
-          count++;
+
           let dateIndex = +dateNode.key;
           let d = _this.date.at(dateIndex);
           let timeIndex = dateIndex;
+
+          let tix = timeIndex + 1800000;
+          let timeText = _this.date.at(tix).timeText;
+          let power = _this.powerAt(dateIndex, timeIndex);
+          if (power.pvOutputTotal > 0.1) {
+            // corrupt data record - shouldn't be any PV for 00:30
+            return;
+          }
+
+          count++;
           for (let i = 0; i < 47; i++) {
             timeIndex += 1800000;
             let timeText = _this.date.at(timeIndex).timeText;
-            let power = _this.powerAt(dateIndex, timeIndex).houseLoadTotal;
-            slots[i] = power; 
+            let power = _this.powerAt(dateIndex, timeIndex);
+            slots[i] = power.houseLoadTotal; 
           }
           //console.log(slots);
           let sum = 0;
@@ -1102,6 +1115,8 @@ class Solis {
             totals[i] += slots[i]
           }
         });
+        //console.log('profile total days with data: ' + count);
+        //console.log(totals);
         for (let i = 0; i < 47; i++) {
           totals[i] = +(totals[i] / count).toFixed(2);
         }
