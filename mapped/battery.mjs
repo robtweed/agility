@@ -389,13 +389,102 @@ class Battery {
   }
 
   get shouldBeDischarged() {
-    let solisNow = this.solis.dataNow;
+
+    /*
+      New logic:
+
+      Get no of slots needed for battery charging until cutoff horizon: X
+
+      Get no of always-buy slots: Y
+
+      If Y > X, should I discharge current slot?
+
+        Only if there's enough charge in the battery to last until the first available always-buy slot
+
+      To calculate that:  
+
+        Get time of first always-buy slot: D
+
+        If D is not current time:
+
+          Get net power needed from now until D:  A
+
+          Get power currently available in battery: B
+
+          Get amount of power in 1 slot's worth of battery power: C
+
+          If B > ( A + C)  then discharge current slot
+
+    */
+
+    let positionNow = this.positionNow(false);
+
+    this.logger.write('Should battery discharge during this slot?');
+    this.logger.write('Position Now:');
+    this.logger.write(positionNow);
+
+    let noOfAlwaysBuySlots = +this.octopus.noOfAlwaysBuySlots;
+    this.logger.write('No of always-buy slots: ' + noOfAlwaysBuySlots);
+    this.logger.write('No of charge slots needed till cutoff: ' + positionNow.chargeSlotsNeeded);
+
+    if (noOfAlwaysBuySlots > positionNow.chargeSlotsNeeded) {
+      this.logger.write('Discharge possible: further analysis...');
+      let auprice = positionNow.alwaysUsePrice;
+      this.logger.write('always use price: ' + auprice);
+      let now = this.date.now();
+      this.octopus.sortSlots();
+      let slots = this.octopus.cheapestSlotArray;
+      let earliestSlotTime = 5000000000000;
+      let timeText = '';
+      for (let slot of slots) {
+        if (slot.price <= auprice && +slot.timeIndex != now.slotTimeIndex && +slot.timeIndex < earliestSlotTime) {
+          earliestSlotTime = +slot.timeIndex;
+          timeText = slot.timeText;
+        }
+      }
+      this.logger.write('Earliest alwaysUse slot = ' + earliestSlotTime + ': ' + timeText);
+      if (positionNow.slot !== timeText) {
+        this.logger.write('Enough battery power for discharge?');
+        let then = this.date.at(earliestSlotTime);
+        let override = false;
+        if (now.dateIndex === then.dateIndex) override = true;
+        this.logger.write('override (should be false if earliest slot is tomorrow): ' + override);
+
+        let netPowerNeeded = this.netPowerBetween(positionNow.slot, timeText, override, true);
+        this.logger.write('Net power needed from now until ' + timeText + ': ' + netPowerNeeded);
+        netPowerNeeded += positionNow.battery.powerAddedPerCharge;
+        let availablePower = positionNow.battery.availablePower;
+        this.logger.write('Available in battery: ' + availablePower + '; power needed: ' + netPowerNeeded);
+        if (availablePower >= netPowerNeeded) {
+          this.logger.write('Discharge current slot!');
+          return true;
+        }
+        else {
+          this.logger.write('Not enough surplus power to discharge');
+          return false;
+        }
+      }
+      else {
+        this.logger.write('Earliest always use slot is current slot: dont discharge');
+        return false;
+      }
+    }
+    else {
+      this.logger.write('No of always-buy slots does not exceed no of charge slots needed, so dont discharge');
+      return false;
+    }
+
+
+    // old logic:
+
+    //let solisNow = this.solis.dataNow;
     /*
     if (+solisNow.pvOutputNow > +solisNow.houseLoadNow) {
       this.logger.write('Currently generating more solar PV than house load, so dont attempt to discharge');
       return false;
     }
     */
+    /*
     let d = this.date.now();
     let prevD = this.date.at(d.previousSlotTimeIndex);
     let previousSlotPower = this.solis.averagePowerBetween(prevD.timeText, d.slotTimeText);
@@ -464,6 +553,7 @@ class Battery {
     }
     this.logger.write('Insufficient surplus power to allow discharge');
     return false;
+    */
   }
 
   positionNow(log, toTimeText, todayOnly, ignorePV) {

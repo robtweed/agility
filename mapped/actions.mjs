@@ -54,6 +54,9 @@ class Actions {
           this.addTask('inverterGridOnly');
         }
         else {
+          this.addTask('shouldBatteryBeDischarged');
+
+          /*
           let now = this.date.now();
           this.logger.write('Check if peak time');
           this.logger.write('hour now: ' + now.hour);
@@ -72,6 +75,7 @@ class Actions {
             this.logger.write('Not peak time');
             this.addTask('shouldBatteryBeDischarged');
           }
+          */
         }
         return {charge: charge};
       },
