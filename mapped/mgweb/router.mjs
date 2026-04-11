@@ -350,6 +350,73 @@ router.get('/agility/solcast/predictionHistory', (Request, ctx) => {
 
 });
 
+router.get('/agility/axle/isenabled', (Request, ctx) => {
+
+  return {
+    payload: {
+      configured: agility.axle.isConfigured,
+      enabled: agility.axle.isEnabled
+    }
+  };
+
+});
+
+router.get('/agility/axle/enable', (Request, ctx) => {
+
+  if (!agility.axle.isConfigured) {
+    return {
+      payload: {
+        error: 'Axle Configuration is incomplete, so unable to enable'
+      }
+    };
+  }
+
+  agility.axle.enable();
+
+  return {
+    payload: {
+      ok: true
+    }
+  };
+
+});
+
+router.get('/agility/axle/disable', (Request, ctx) => {
+
+  agility.axle.disable();
+
+  return {
+    payload: {
+      ok: true
+    }
+  };
+
+});
+
+router.get('/agility/axle/update', async (Request, ctx) => {
+
+  let res = await agility.axle.request();
+  console.log('Axle res:');
+  console.log(res);
+  if (res.error) {
+    return {
+      payload: {
+        error: 'Unable to fetch your Axle Notification',
+        details: res.error
+      }
+    };
+  }
+
+  return {
+    payload: {
+      ok: true,
+      content: res
+    }
+  };
+
+});
+
+
 
 router.get('/agility/clockSync/isEnabled', (Request, ctx) => {
 
@@ -393,9 +460,22 @@ router.get('/agility/clockSync/disable', (Request, ctx) => {
 
 });
 
+router.get('/agility/clockSync/now', async (Request, ctx) => {
+
+  let res = await agility.solis.setTimeNowAPI();
+
+  return {
+    payload: {
+      results: res
+    }
+  };
+
+});
+
+
 
 router.get('/agility/config/:category', (Request, ctx) => {
-  let allowed = ['solisCloud', 'solcast', 'octopus', 'battery', 'operation'];
+  let allowed = ['solisCloud', 'solcast', 'octopus', 'battery', 'operation', 'axle'];
   let category = Request.params.category;
   if (!allowed.includes(category)) {
     return {
@@ -413,6 +493,11 @@ router.get('/agility/config/:category', (Request, ctx) => {
     if (!data.endpoint) data.endpoint = '';
     if (!data.key) data.key = '';
   }
+  if (category === 'axle') {
+    if (!data.endpoint || data.endpoint === '') data.endpoint = 'https://api.axle.energy/vpp/home-assistant/event';
+    if (!data.key) data.key = '';
+  }
+
 
   return {
     payload: {
@@ -422,12 +507,13 @@ router.get('/agility/config/:category', (Request, ctx) => {
 });
 
 router.post('/agility/config/:category', (Request, ctx) => {
-  //let allowed = ['solisCloud', 'solcast', 'octopus', 'battery', 'operation'];
+  //let allowed = ['solisCloud', 'solcast', 'octopus', 'battery', 'operation', 'axle'];
   let fieldNames = {
     solisCloud: ['endpoint', 'key', 'secret', 'inverterSn'],
     octopus: ['zone', 'url1', 'url2'],
     battery: ['storage', 'chargeCurrent', 'dischargeCurrent', 'chargeLimit', 'minimumLevel'],
     solcast: ['endpoint', 'key'],
+    axle: ['endpoint', 'key'],
     operation: ['alwaysUseSlotPrice', 'movingAveragePeriod']
   };
 
@@ -865,6 +951,7 @@ router.get('/agility/solis/inverterDischargeNow', async (Request, ctx) => {
   let d = agility.date.now();
   let toTimeText = agility.date.at(d.slotEndTimeIndex).timeText;
   let status = await agility.solis.inverterDischargeBetween(d.timeText, toTimeText);
+  agility.solis.startNewDischargeHistoryRecord();
   return {
     payload: status
   };

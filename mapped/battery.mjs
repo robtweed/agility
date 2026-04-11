@@ -4,7 +4,7 @@
  | Agility: Solar Battery Optimisation against Octopus Agile Tariff          |
  |           specifically for Solis Inverters                                |
  |                                                                           |
- | Copyright (c) 2024-25 MGateway Ltd,                                       |
+ | Copyright (c) 2024-26 MGateway Ltd,                                       |
  | Redhill, Surrey UK.                                                       |
  | All rights reserved.                                                      |
  |                                                                           |
@@ -25,7 +25,7 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
- 30 May 2025
+ 9 April 2026
 
  */
 
@@ -40,10 +40,12 @@ class Battery {
     this.solis = agility.solis;
     this.solcast = agility.solcast;
     this.octopus = agility.octopus;
+    this.axle = agility.axle;
     this.control = agility.control;
     this.agility = agility;
     let glsdb = agility.glsdb;
     this.chargeHistory = new glsdb.node('agilityChargeHistory');
+    this.dischargeHistory = new glsdb.node('agilityDischargeHistory');
     this.chargeDecisionHistory = new glsdb.node('agilityChargeDecisionHistory');
     this.noOfChargeRecordsToKeep = 100;
   }
@@ -79,6 +81,18 @@ class Battery {
     this.control.$('discharge').delete();
   }
 
+  suppressFirstProductionLogic() {
+    this.control.$('suppressFirstProductionLogic').value = true;
+  }
+
+  unsuppressFirstProductionLogic() {
+    this.control.$('suppressFirstProductionLogic').delete();
+  }
+
+  isFirstProductionLogicSuppressed() {
+    return this.control.$('suppressFirstProductionLogic').exists;
+  }
+
   get percentIncreasePerCharge() {
     if (this.chargeHistory.exists) {
       // calculate average from history
@@ -88,23 +102,25 @@ class Battery {
       this.chargeHistory.forEachChildNode(function(timeNode) {
         let data = timeNode.document;
         let start = +data.start;
-        let end = +data.end;
-        let startMinute = data.startMinute || 0;
-        startMinute = +startMinute;
-        if (startMinute > 29) {
-          startMinute = startMinute - 30;
-        }
-        if (start < end && start < _this.chargeLimit) {
-          let increase = end - start;
-          if (startMinute === 0) {
-            total += increase;
+        if (start < 90) {
+          let end = +data.end;
+          let startMinute = data.startMinute || 0;
+          startMinute = +startMinute;
+          if (startMinute > 29) {
+            startMinute = startMinute - 30;
           }
-          else {
-            // scale up increase to what it would have been for 30 minutes
-            increase = (increase / (30 - startMinute)) * 30;
-            total += increase;
+          if (start < end && start < _this.chargeLimit) {
+            let increase = end - start;
+            if (startMinute === 0) {
+              total += increase;
+            }
+            else {
+              // scale up increase to what it would have been for 30 minutes
+              increase = (increase / (30 - startMinute)) * 30;
+              total += increase;
+            }
+            count++;
           }
-          count++;
         }
       });
       if (total !== 0 && count !== 0) {
@@ -118,9 +134,51 @@ class Battery {
       return +this.config.$('defaultPercentIncreasePerCharge').value;
     }
     else {
-      return 6;
+      return 9;
     }
   }
+
+  get percentDecreasePerDischarge() {
+    if (this.dischargeHistory.exists) {
+      // calculate average from history
+      let _this = this;
+      let total = 0;
+      let count = 0;
+      this.dischargeHistory.forEachChildNode(function(timeNode) {
+        let data = timeNode.document;
+        let start = +data.start;
+        let end = +data.end;
+        console.log('start: ' + start + '; end: ' + end);
+        if (end > _this.minimumLevel) {
+          let startMinute = data.startMinute || 0;
+          startMinute = +startMinute;
+          if (startMinute > 29) {
+            startMinute = startMinute - 30;
+          }
+          if (start > end) {
+            let decrease = start - end;
+            if (startMinute === 0) {
+              total += decrease;
+            }
+            else {
+              // scale up increase to what it would have been for 30 minutes
+              decrease = (decrease / (30 - startMinute)) * 30;
+              total += decrease;
+            }
+            count++;
+          }
+        }
+      });
+      if (total !== 0 && count !== 0) {
+        console.log('total: ' + total + '; count: ' + count);
+        let ave = total / count;
+        console.log('average discharge history value: ' + ave.toFixed(2));
+        return ave;
+      }
+    }
+    return 9;
+  }
+
 
   get totalStorage() {
     return +this.config.$('storage').value;
@@ -203,6 +261,7 @@ class Battery {
     if (this.solcast.isEnabled) {
       let spv = this.solcast.expectedPowerBetween(fromTimeText, toTimeText, override, true, log);
       if (spv > 0) pv = spv;
+      if (log) this.logger.write('Solcast expected PV during this period: ' + spv);
     }
     let netPower = averageExpectedPower.load - pv;
     return netPower;
@@ -284,6 +343,11 @@ class Battery {
         //this.logger.write('now: ' + now.timeIndex + '; ' + now.hour);
         //this.logger.write('firstPVTimeToday: ' + firstPVTimeToday.timeIndex);
         if (now.hour > 18 || now.timeIndex < firstPVTimeToday.timeIndex) {
+          // check if logic is to be suppressed due to upcoming always buy slots: if so, return false
+          if (this.isFirstProductionLogicSuppressed()) {
+            this.logger.write('First Production Logic suppression flag is set, so no further action');
+            return false;
+          }
           let todayOnly = true;
           if (now.hour > 18) todayOnly = false;
           this.logger.write('Current time is earlier than first PV production today');
@@ -308,6 +372,9 @@ class Battery {
         }
         else {
           this.logger.write('Current time is later than first PV production today');
+          // remove suppression of first production logic (if set) - see shouldBeDischarged()
+          this.unsuppressFirstProductionLogic();
+          this.logger.write('First Production logic suppression flag has been removed');
           return false;
         }
       }
@@ -323,6 +390,9 @@ class Battery {
   get shouldBeCharged() {
     // if previous slot charged battery,save the new battery level
     this.solis.endChargeHistoryRecord();
+    //
+    // if previous slot discharged battery,save the new battery level
+    this.solis.endDischargeHistoryRecord();
     //
     let obj = this.availableSlotsByPrice(true);
 
@@ -415,6 +485,11 @@ class Battery {
 
           If B > ( A + C)  then discharge current slot
 
+      But - only if A isn't negative.  If it's negative, then it means PV generation is in full swing
+      so discharging the battery is not desirable.  The risk is the battery keeps getting discharged and
+      not enought time to get it recharged again.  This is generally an issue when always buy slots
+      are during solar production time (eg afternoon) rather than in the early hours.
+
     */
 
     let positionNow = this.positionNow(false);
@@ -454,9 +529,16 @@ class Battery {
         this.logger.write('Net power needed from now until ' + timeText + ': ' + netPowerNeeded);
         netPowerNeeded += positionNow.battery.powerAddedPerCharge;
         let availablePower = positionNow.battery.availablePower;
-        this.logger.write('Available in battery: ' + availablePower + '; power needed: ' + netPowerNeeded);
+        this.logger.write('Available in battery: ' + availablePower + '; net power needed until first always buy slot: ' + netPowerNeeded);
+        if (netPowerNeeded < 0) {
+          this.logger.write('PV surplus - ie negative net power needed.  Dont discharge');
+          return false;
+        }
         if (availablePower >= netPowerNeeded) {
           this.logger.write('Discharge current slot!');
+          // set first production logic suppression
+          this.suppressFirstProductionLogic();
+          this.logger.write('First Production Logic suppression flag has been set');
           return true;
         }
         else {
@@ -578,6 +660,7 @@ class Battery {
     else {
       solis = this.solis.averagePowerBetween(fromTimeText, toTimeText, log);
     }
+    solis.load = +solis.load + this.axle.powerAdjustment;
     if (ignorePV) solis.pv = 0;
     let pv = solis.pv;
     let solcast = {
@@ -871,6 +954,15 @@ class Battery {
       }
     });
     this.logger.write('Battery charge history cleared down to most recent ' + this.noOfChargeRecordsToKeep + ' records');
+
+    count = 0;
+    this.dischargeHistory.forEachChildNode({direction: 'reverse'}, function(timeNode) {
+      count++;
+      if (count > _this.noOfChargeRecordsToKeep) {
+        timeNode.delete();
+      }
+    });
+    this.logger.write('Battery discharge history cleared down to most recent ' + this.noOfChargeRecordsToKeep + ' records');
 
     let noOfDaysToKeep = this.agility.movingAveragePeriod;
     count = 0;

@@ -9,7 +9,7 @@ export function load(ctx) {
   </span>
 
   <sbadmin-footer-text golgi:appendTo="footerTarget">
-    <sbadmin-copyright text="2025 MGateway Ltd" />
+    <sbadmin-copyright text="2026 MGateway Ltd" />
   </sbadmin-footer-text>
 
   <sbadmin-sidebar-menu golgi:appendTo="sidebarTarget">
@@ -40,6 +40,7 @@ export function load(ctx) {
         <sbadmin-sidebar-menu-item text="Octopus Agile" contentPage="octopus"/>
         <sbadmin-sidebar-menu-item text="Custom Tariff Builder" contentPage="tariffBuilder" />
       </sbadmin-sidebar-sub-menu>
+      <sbadmin-sidebar-menu-item text="Axle Energy" contentPage="axle"/>
       <sbadmin-sidebar-menu-item text="Battery" contentPage="battery"/>
       <sbadmin-sidebar-sub-menu text="Solcast">
         <sbadmin-sidebar-menu-item text="API Configuration" contentPage="solcast" />

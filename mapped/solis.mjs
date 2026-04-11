@@ -4,7 +4,7 @@
  | Agility: Solar Battery Optimisation against Octopus Agile Tariff          |
  |           specifically for Solis Inverters                                |
  |                                                                           |
- | Copyright (c) 2024-25 MGateway Ltd,                                       |
+ | Copyright (c) 2024-26 MGateway Ltd,                                       |
  | Redhill, Surrey UK.                                                       |
  | All rights reserved.                                                      |
  |                                                                           |
@@ -25,7 +25,7 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
- 10 April 2025
+ 26 March 2026
 
  */
 
@@ -43,6 +43,7 @@ class Solis {
     this.agility = agility;
     this.battery = new Battery(agility);
     this.chargeHistory = new glsdb.node('agilityChargeHistory');
+    this.dischargeHistory = new glsdb.node('agilityDischargeHistory');
     this.octopusAgile = new glsdb.node('octopusAgile.byTime');
   }
 
@@ -650,6 +651,27 @@ class Solis {
     }
   }
 
+  startNewDischargeHistoryRecord() {
+    let levelNow = this.batteryLevelNow;
+    console.log('startNewDischargeHistoryRecord: levelNow = ' + levelNow);
+    if (levelNow) {
+      let d = this.date.now();
+      this.dischargeHistory.$([d.slotTimeIndex, 'start']).value = levelNow;
+      this.dischargeHistory.$([d.slotTimeIndex, 'startMinute']).value = d.minute;
+      console.log('dischargeHistory record saved');
+    }
+  }
+
+  endDischargeHistoryRecord() {
+    let levelNow = this.batteryLevelNow;
+    if (levelNow) {
+      let d = this.date.now();
+      if (this.dischargeHistory.$(d.previousSlotTimeIndex).exists) {
+        this.dischargeHistory.$([d.previousSlotTimeIndex, 'end']).value = levelNow;
+      }
+    }
+  }
+
   async inverterCharge(override) {
     if (!override && !this.agility.chargingEnabled) {
       this.logger.write('Charging logic is currently disabled');
@@ -709,6 +731,7 @@ class Solis {
       this.logger.write('Discharging logic is currently disabled');
       return {status: 'Inverter Discharge task ignored'};
     }
+    this.startNewDischargeHistoryRecord();
 
     let fromD = this.date.now();
     let toD = this.date.at(fromD.slotEndTimeIndex);

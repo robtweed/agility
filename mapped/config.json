@@ -10,6 +10,9 @@
     "url1": "https://api.octopus.energy/v1/products/AGILE-23-12-06/electricity-tariffs/E-1R-AGILE-23-12-06-",
     "url2": "/standard-unit-rates/"
   },
+  "axle": {
+    "url": "https://api.axle.energy/vpp/home-assistant/event"
+  },
   "battery": {
     "storage": 3.5,
     "minimumLevel": 20,

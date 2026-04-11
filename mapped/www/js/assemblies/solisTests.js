@@ -18,6 +18,11 @@ export function load() {
         <fieldset>
           <hr />
           <sbadmin-card-text>
+            Synchronise the Agility and Inverter Clocks
+          </sbadmin-card-text>
+          <sbadmin-button color="teal" text="Synchronise Clocks" golgi:hook="clockSync" />
+          <hr />
+          <sbadmin-card-text>
             Agility only currently supports the Solis S3-Wifi DataLogger
           </sbadmin-card-text>
           <sbadmin-button color="orange" text="Discover Your DataLogger Type" golgi:hook="dataLogger" />
@@ -119,7 +124,23 @@ export function load() {
           let resp = JSON.stringify(json, null, 2);
           contentPage.testResults.rootElement.innerHTML = `<p>Response:</p><pre>` + resp + `</pre>`;
         });
+      },
+      clockSync: function() {
+        let _this = this;
+        let contentPage = this.getParentComponent('sbadmin-content-page');
+        this.on('clicked', async function() {
+          contentPage.testResults.rootElement.innerHTML = '';
+          let json = await _this.context.request('/agility/clockSync/now');
+          if (json.error) {
+            contentPage.toast.headerTxt = 'Error';
+            contentPage.toast.display(json.error);
+          }
+          let resp = JSON.stringify(json, null, 2);
+          contentPage.testResults.rootElement.innerHTML = `<p>Response:</p><pre>` + resp + `</pre>`;
+        });
       }
+
+
 
     }
   };

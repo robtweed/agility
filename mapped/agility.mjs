@@ -4,7 +4,7 @@
  | Agility: Solar Battery Optimisation against Octopus Agile Tariff          |
  |           specifically for Solis Inverters                                |
  |                                                                           |
- | Copyright (c) 2024-25 MGateway Ltd,                                       |
+ | Copyright (c) 2024-26 MGateway Ltd,                                       |
  | Redhill, Surrey UK.                                                       |
  | All rights reserved.                                                      |
  |                                                                           |
@@ -25,7 +25,7 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
- 30 March 2025
+ 27 March 2026
 
  */
 
@@ -35,6 +35,7 @@ import {Logger} from './logger.mjs';
 import {Backup} from './backup.mjs';
 import {Octopus} from './octopus.mjs';
 import {Solcast} from './solcast.mjs';
+import {Axle} from './axle.mjs';
 import {Solis} from './solis.mjs';
 import {Battery} from './battery.mjs';
 import {Actions} from './actions.mjs';
@@ -60,6 +61,7 @@ let Agility = class {
     this.octopus = new Octopus(this);
     if (!this.isConfigured) this.loadConfig();
     this.solcast = new Solcast(this);
+    this.axle = new Axle(this);
     this.battery = new Battery(this);
     this.actions = new Actions(this);
     let _this = this;
@@ -323,6 +325,7 @@ let Agility = class {
       this.addTask('updateOctopusTariffs');
       if (this.solcast.isEnabled) this.addTask('updateSolcastData');
       this.addTask('updateSolisData');
+      if (this.axle.isEnabled) this.addTask('updateAxleData');
       this.addTask('shouldBatteryBeCharged');
       if (now.slotTimeText === '00:00') {
         // started a new day
