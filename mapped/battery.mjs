@@ -25,7 +25,7 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
- 9 April 2026
+ 23 April 2026
 
  */
 
@@ -479,16 +479,17 @@ class Battery {
 
           Get net power needed from now until D:  A
 
-          Get power currently available in battery: B
+          Get power currently available in battery after 1 slot's worth of discharge: B
 
-          Get amount of power in 1 slot's worth of battery power: C
-
-          If B > ( A + C)  then discharge current slot
+          If B > A then discharge slot
 
       But - only if A isn't negative.  If it's negative, then it means PV generation is in full swing
       so discharging the battery is not desirable.  The risk is the battery keeps getting discharged and
       not enought time to get it recharged again.  This is generally an issue when always buy slots
       are during solar production time (eg afternoon) rather than in the early hours.
+
+      Note: if D is later than time of first production, then check that discharging won't leave
+      battery empty too early
 
     */
 
@@ -527,14 +528,67 @@ class Battery {
 
         let netPowerNeeded = this.netPowerBetween(positionNow.slot, timeText, override, true);
         this.logger.write('Net power needed from now until ' + timeText + ': ' + netPowerNeeded);
-        netPowerNeeded += positionNow.battery.powerAddedPerCharge;
-        let availablePower = positionNow.battery.availablePower;
-        this.logger.write('Available in battery: ' + availablePower + '; net power needed until first always buy slot: ' + netPowerNeeded);
+        //netPowerNeeded += positionNow.battery.powerAddedPerCharge;
+        //let availablePower = positionNow.battery.availablePower;
+        this.logger.write('Current battery level: ' + positionNow.battery.level);
+        this.logger.write('Average percentage drop per discharge: ' + this.percentDecreasePerDischarge);
+        let levelAfterDischarge = positionNow.battery.level - this.percentDecreasePerDischarge;
+        this.logger.write('Level after discharge: ' + levelAfterDischarge);
+        this.logger.write('Minimum level: ' + this.minimumLevel);
+        if (levelAfterDischarge <= this.minimumLevel) {
+          this.logger.write('Battery level too low for discharging');
+          return false;
+        }
+        let availablePower = this.powerFromPercentage(levelAfterDischarge - this.minimumLevel);
+        this.logger.write('Available in battery after a discharge: ' + availablePower);
+        if (availablePower < 0) {
+          this.logger.write('Battery level too low for discharging');
+          return false;
+        }
         if (netPowerNeeded < 0) {
           this.logger.write('PV surplus - ie negative net power needed.  Dont discharge');
           return false;
         }
-        if (availablePower >= netPowerNeeded) {
+        if (availablePower > netPowerNeeded) {
+
+          // If the first Always Buy slot is after the first production turnaround time,
+          //  then only discharge if it won't leave the battery prematurely empty before
+          //  PV kicks in
+
+          this.logger.write('Discharge possible, but check time of first production...');
+
+          let firstPVTime = this.solcast.firstProductionTime;
+          if (firstPVTime) {
+            let firstPVTimeIndex = firstPVTime.timeIndex + this.solis.productionDelay;
+            let firstPVTimeText = this.date.at(firstPVTimeIndex).timeText;
+            let firstPVTimeToday = this.date.atTime(firstPVTimeText);
+            this.logger.write('firstPVTimeToday: ' + firstPVTimeToday.timeIndex);
+            this.logger.write('earliestSlotTime: ' + earliestSlotTime);
+            if (earliestSlotTime > firstPVTimeToday.timeIndex) {
+              this.logger.write('Earliest Always Buy slot is after time of first production...');
+
+              if (now.hour >= 16 || now.timeIndex < firstPVTimeToday.timeIndex) {
+                this.logger.write('Time now is after 4pm or before time of first production...');
+                let todayOnly = true;
+                if (now.hour > 16) todayOnly = false;
+                this.logger.write('Get net power requirements from now to First Production time: ' + firstPVTimeText);
+                let netPowerNeededTillFP = this.netPowerBetween(positionNow.slot, firstPVTimeText, override, true);
+                this.logger.write('Net power needed from now until ' + firstPVTimeText + ': ' + netPowerNeededTillFP);
+                this.logger.write('Available power in battery (after a discharge): ' + availablePower);
+                if (availablePower < netPowerNeededTillFP) {
+                  this.logger.write('Not enough surplus power to discharge without exhausting battery before first production');
+                  return false;
+                }
+              }
+            }
+            else {
+              this.logger.write('Earliest Always Buy Slot is before time of first production, so continue');
+            }
+          }
+          else {
+            this.logger.write('Unable to calculate first production time, so continue');
+          }
+
           this.logger.write('Discharge current slot!');
           // set first production logic suppression
           this.suppressFirstProductionLogic();
