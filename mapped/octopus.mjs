@@ -4,7 +4,7 @@
  | Agility: Solar Battery Optimisation against Octopus Agile Tariff          |
  |           specifically for Solis Inverters                                |
  |                                                                           |
- | Copyright (c) 2024-25 MGateway Ltd,                                       |
+ | Copyright (c) 2024-26 MGateway Ltd,                                       |
  | Redhill, Surrey UK.                                                       |
  | All rights reserved.                                                      |
  |                                                                           |
@@ -25,7 +25,7 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
- 10 April 2025
+ 9 October 2026
 
 */
 
@@ -40,10 +40,12 @@ let Octopus = class {
     this.tariffs = new glsdb.node('octopusAgile');
     this.byTime = this.tariffs.$('byTime');
     this.byPrice = this.tariffs.$('byPrice');
+    this.outgoingAgile = new glsdb.node('octopusOutgoingAgile');
     this.customTariff = new glsdb.node('customTariff');
     this.date = agility.date;
     this.agility = agility;
     this.logger = agility.logger;
+    this.sortGlobal = new glsdb.node('tempSort');
   }
 
   get isConfigured() {
@@ -63,6 +65,10 @@ let Octopus = class {
 
   get url2() {
     return this.config.$('url2').value;
+  }
+
+  get xurl1() {
+    return this.config.$('xurl1').value;
   }
 
   get zone() {
@@ -91,6 +97,65 @@ let Octopus = class {
 
   set accountId(value) {
     this.config.$('accountId').value = value;
+  }
+
+  get agileExportEnabled() {
+    let node = this.config.$('agileExportEnabled');
+    if (!node.exists) return false;
+    return node.value;
+  }
+
+  enableAgileExport() {
+    this.config.$('agileExportEnabled').value = true;
+  }
+
+  disableAgileExport() {
+    this.config.$('agileExportEnabled').delete();
+  }
+
+  get minimumMargin() {
+    if (this.config.$('minimumAgileImportExportMargin').exists) {
+      return this.config.$('minimumAgileImportExportMargin').value;
+    }
+    return 7;
+  }
+
+  set minimumMargin(value) {
+    if (!value || value === '') value = 7;
+    this.config.$('minimumAgileImportExportMargin').value = value;
+  }
+
+  get minimumExportPrice() {
+    if (this.config.$('minimumAgileExportPrice').exists) {
+      return this.config.$('minimumAgileExportPrice').value;
+    }
+    return 12;
+  }
+
+  set minimumExportPrice(value) {
+    if (!value || value === '') value = 12;
+    this.config.$('minimumAgileExportPrice').value = value;
+  }
+
+  get alwaysBuyMargin() {
+    if (this.config.$('alwaysBuyAgileImportExportMargin').exists) {
+      return this.config.$('alwaysBuyAgileImportExportMargin').value;
+    }
+    return 20;
+  }
+
+  set alwaysBuyMargin(value) {
+    if (!value || value === '') value = 20;
+    this.config.$('alwaysBuyAgileImportExportMargin').value = value;
+  }
+
+  get agileImportExportMargin() {
+    return (this.bestAgileExportSlotPrice - this.priceNow);
+  }
+
+  get agileExportPriceNow() {
+    let now = this.date.now();
+    return this.outgoingAgile.$([now.dateIndex, now.slotTimeIndex, 'price']).value;
   }
 
   get customTariffEnabled() {
@@ -180,6 +245,19 @@ let Octopus = class {
     }
   }
 
+  async fetchOutgoingAgileTariff() {
+    if (!this.config.exists) {
+      return {error: 'Agility has not been configured to access Octopus Tariffs'};
+    }
+    else {
+      console.log('xurl1: ' + this.xurl1);
+      let url = this.xurl1 + this.zone + this.url2;
+      console.log(url);
+      return await this.request(url, this.username);
+    }
+  }
+
+
   async generateUrlFields(accountId, key) {
     let url = 'https://api.octopus.energy/v1/accounts/' + accountId;
     let json = await this.request(url, key);
@@ -196,6 +274,11 @@ let Octopus = class {
     let error;
     let stop = false;
     let results = {};
+    let oj = json;
+    let importFound = false;
+    let exportFound = false;
+    console.log('octopus account info:');
+    console.log(JSON.stringify(json, null, 2));
     for (let property of json.properties) {
       if (stop) break;
       if (property.moved_out_at === null) {
@@ -207,40 +290,41 @@ let Octopus = class {
               if (from.timeIndex < now.timeIndex) {
                 let to = this.date.at(agreement.valid_to);
                 if (to.timeIndex > now.timeIndex) {
-                  // what was the Agile product code at the from date?
-                  let url = 'https://api.octopus.energy/v1/products/?available_at=' + agreement.valid_from + '&is_green=true';
-                  let json = await this.request(url, key);
-                  //console.log(json);
-                  if (json.error) {
-                    error = json;
+                  console.log('current import agreement found:');
+                  console.log(JSON.stringify(agreement, null, 2));
+
+                  let dnoCode = agreement.tariff_code.slice(-1);
+                  let product = agreement.tariff_code.split('-').slice(2, -1).join('-');
+                  let url1 = 'https://api.octopus.energy/v1/products/' + product + '/electricity-tariffs/' + agreement.tariff_code.slice(0, -1);
+                  let url2 = '/standard-unit-rates/';
+                  results.dnoCode = dnoCode;
+                  results.url1 = url1;
+                  results.url2 = url2;
+                  importFound = true;
+                  if (importFound && exportFound) {
                     stop = true;
-                    break;
                   }
-                  if (!json.results) {
-                    error = {
-                      error: 'Octopus did not return your tariff results',
-                      json: json
-                    };
+                  break;
+                }
+              }
+            }
+          }
+          else {
+            for (let agreement of point.agreements) {
+              let from = this.date.at(agreement.valid_from);
+              if (from.timeIndex < now.timeIndex) {
+                let to = this.date.at(agreement.valid_to);
+                if (to.timeIndex > now.timeIndex) {
+                  console.log('current export agreement found:');
+                  console.log(JSON.stringify(agreement, null, 2));
+                  let product = agreement.tariff_code.split('-').slice(2, -1).join('-');
+                  let xurl1 = 'https://api.octopus.energy/v1/products/' + product + '/electricity-tariffs/' + agreement.tariff_code.slice(0, -1);
+                  results.xurl1 = xurl1;
+                  exportFound = true;
+                  if (importFound && exportFound) {
                     stop = true;
-                    break;
                   }
-                  if (json.results) {
-                    for (let tariff of json.results) {
-                      if (tariff.direction === 'IMPORT' && tariff.brand === 'OCTOPUS_ENERGY' && tariff.code.includes('AGILE')) {
-                        let product = tariff.code;
-                        let dnoCode = agreement.tariff_code.slice(-1);
-                        let url1 = 'https://api.octopus.energy/v1/products/' + product + '/electricity-tariffs/' + agreement.tariff_code.slice(0, -1);
-                        let url2 = '/standard-unit-rates/';
-                        results = {
-                          dnoCode: dnoCode,
-                          url1: url1,
-                          url2: url2
-                        };
-                        stop = true;
-                        break;
-                      }
-                    }
-                  }
+                  break;
                 }
               }
             }
@@ -331,6 +415,65 @@ let Octopus = class {
     }
   }
 
+  async getLatestAgileExportTariffTable() {
+    let json;
+    if (this.isBefore4) {
+      // has tariff already been saved for today?
+      if (!this.outgoingAgile.$(this.dateIndexNow).exists) {
+        console.log('before 4, outgoing agile doesnt exist for dateIndex now: ' + this.dateIndexNow);
+        json = await this.fetchOutgoingAgileTariff();
+      }
+    }
+    else {
+      // has tariff already been saved for today?
+      if (!this.outgoingAgile.$(this.dateIndexNow).exists) {
+        console.log('after 4, outgoing agile doesnt exist for dateIndex now ' + this.dateIndexNow);
+        json = await this.fetchOutgoingAgileTariff();
+      }
+      else if (!this.outgoingAgile.$(this.dateIndexTomorrow).exists) {
+        console.log('after 4, outgoing agile doesnt exist for dateIndex tomorrow ' + this.dateIndexTomorrow);
+        json = await this.fetchOutgoingAgileTariff();
+      }
+    }
+    if (json) {
+      if (json.error) {
+        return json;
+      }
+      if (!json.results || !Array.isArray(json.results)) {
+        return {error: 'No results returned from Octopus'};
+      }
+      console.log(json);
+      for (let slot of json.results) {
+        let slotTime = this.date.at(slot.valid_from);
+        let dateIndex = slotTime.dateIndex;
+        let timeIndex = slotTime.timeIndex;
+        let slotNode = this.outgoingAgile.$([dateIndex, timeIndex]);
+        if (!slotNode.exists) {
+          let startTimeStr = slotTime.timeText;
+          let to_d = this.date.at(slot.valid_to);
+          let endTimeStr = to_d.timeText;
+          let price = +slot.value_inc_vat;
+          slotNode.document = {
+            start: startTimeStr,
+            hour: slotTime.hourText,
+            min: slotTime.minuteText,
+            end: endTimeStr,
+            endTimeIndex: to_d.timeIndex,
+            price: price,
+            day: slotTime.day,
+            month: slotTime.month,
+            timeIndex: timeIndex,
+            dateIndex: dateIndex
+          }
+        }
+      }
+      return {status: 'Octopus Outgoing Agile Tariff Table fetched and updated'}
+    }
+    else {
+      return {status: 'Outgoing Agile Tariff Table already up to date'}
+    }
+  }
+
   get lastSlot() {
     if (this.byTime.exists) {
       let lc = this.byTime.lastChild;
@@ -346,6 +489,25 @@ let Octopus = class {
 
   get tomorrowsTariffsAvailable() {
     let lastSlot = this.lastSlot;
+    if (lastSlot && +this.date.now().dateIndex < +lastSlot.dateIndex) return true;
+    return false;
+  }
+
+  get lastExportSlot() {
+    if (this.outgoingAgile.exists) {
+      let lc = this.outgoingAgile.lastChild;
+      if (lc && lc.exists) {
+        let lc2 = lc.lastChild;
+        if (lc2 && lc2.exists) {
+          return lc2.document;
+        }
+      }
+    }
+    return;
+  }
+
+  get tomorrowsExportTariffsAvailable() {
+    let lastSlot = this.lastExportSlot;
     if (lastSlot && +this.date.now().dateIndex < +lastSlot.dateIndex) return true;
     return false;
   }
@@ -544,6 +706,136 @@ let Octopus = class {
     return false;
   }
 
+  addToSortIndex(timeNode) {
+    let price = +timeNode.$('price').value;
+    let dateIndex = timeNode.$('dateIndex').value;
+    let priceIndex = 999999 - (price * 100);
+    let time = timeNode.$('start').value;
+    let day = timeNode.$('day').value;
+    let timeIndex = timeNode.key;
+    this.sortGlobal.$([priceIndex, dateIndex, timeIndex]).document = {
+      time: time,
+      day: day,
+      price: price
+    };
+  }
+
+  get bestAgileExportSlotPrice() {
+    this.sortRemainingAgileExportSlotsForToday();
+    let _this = this;
+    let price;
+    this.sortGlobal.forEachLeafNode(function(node) {
+      let keys = [...node.subscripts];
+      keys[3] = 'price';
+      price = _this.sortGlobal.$(keys).value;
+      return false;
+    });
+    return price;
+  }
+
+  sortRemainingAgileExportSlotsForToday() {
+    this.sortGlobal.delete();
+    let now = this.date.now();
+    let dateIndex = now.dateIndex;
+    let timeIndex = now.slotTimeIndex;
+
+    if (!this.outgoingAgile.exists) {
+      return;
+    }
+    let _this = this;
+
+    this.outgoingAgile.$(dateIndex).forEachChildNode({from: timeIndex}, function(timeNode) {
+      _this.addToSortIndex(timeNode);
+    });
+
+  }
+
+  sortAllAgileExportSlotsForDay(offset) {
+    this.sortGlobal.delete();
+    offset = offset || 0;
+    let dateIndex = this.date.atMidnight(offset).dateIndex;
+    let _this = this;
+
+    this.outgoingAgile.$(dateIndex).forEachChildNode(function(timeNode) {
+      _this.addToSortIndex(timeNode);
+    });
+
+  }
+
+  sortAgileExportSlots(to) {
+    this.sortGlobal.delete();
+    let now = this.date.now();
+    let dateIndex = now.dateIndex;
+    let timeIndex = now.slotTimeIndex;
+    let _this = this;
+
+    if (!this.outgoingAgile.exists) {
+      return;
+    }
+
+    let toTimeIndex = this.date.atTime(to, dateIndex).slotTimeIndex;
+    if (to && toTimeIndex > timeIndex) {
+      toTimeIndex
+      this.outgoingAgile.$(dateIndex).forEachChildNode({from: timeIndex, to: toTimeIndex}, function(timeNode) {
+        _this.addToSortIndex(timeNode);
+      });
+
+    }
+    else {
+      // sort all available slots
+
+      this.outgoingAgile.$(dateIndex).forEachChildNode({from: timeIndex}, function(timeNode) {
+        _this.addToSortIndex(timeNode);
+      });
+      let tomorrow = this.date.atMidnight(1);
+      this.outgoingAgile.$(tomorrow.dateIndex).forEachChildNode(function(timeNode) {
+        _this.addToSortIndex(timeNode);
+      });
+    }
+
+    /*
+    if (this.tomorrowsExportTariffsAvailable) {
+      console.log('tomorrows export tariffs available');
+      // use todays slots from now until 23:30 and tomorrows from midnight until to time or end
+      this.outgoingAgile.$(dateIndex).forEachChildNode({from: timeIndex}, function(timeNode) {
+        _this.addToSortIndex(timeNode);
+      });
+      let tomorrow = this.date.atMidnight(1);
+      console.log('toTimeIndex: ' + toTimeIndex);
+      this.outgoingAgile.$(tomorrow.dateIndex).forEachChildNode({to: toTimeIndex}, function(timeNode) {
+        _this.addToSortIndex(timeNode);
+      });
+    }
+    else {
+     // use todays slots from now until to time (default 18:00)
+      console.log('tomorrows tariffs not yet available');
+      this.outgoingAgile.$(dateIndex).forEachChildNode({from: timeIndex}, function(timeNode) {
+        _this.addToSortIndex(timeNode);
+      });
+    }
+    */
+  }
+
+  get bestExportPrices() {
+    let arr = [];
+    let _this = this;
+    this.sortGlobal.forEachChildNode(function(priceNode) {
+      priceNode.forEachChildNode(function(dateNode) {
+        dateNode.forEachChildNode(function(timeNode) {
+          let d = _this.date.at(timeNode.key);
+          let date = d.dayText + '/' + d.monthText;
+          let time = d.timeText;
+          arr.push({
+            date: date,
+            time: time,
+            price: timeNode.$('price').value
+          });
+        });
+      });
+    });
+    return arr;
+  }
+
   getCustomTariff() {
     let prices = [];
     if (this.customTariff.exists) {
@@ -642,6 +934,16 @@ let Octopus = class {
         dateNode.delete();
       }
     });
+    // clear down Outgoing Agile tariff table
+    if (this.agileExportEnabled) {
+      count = 0;
+      this.outgoingAgile.forEachChildNode({direction: 'reverse'}, function(dateNode) {
+        count++;
+        if (count > noOfDaysToKeep) {
+          dateNode.delete();
+        }
+      });
+    }
     this.logger.write('Octopus data cleared down to most recent ' + noOfDaysToKeep + ' days');
   }
 

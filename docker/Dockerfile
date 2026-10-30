@@ -1,11 +1,11 @@
 # Docker Container to provide Agility's Runtime Environment
 # MGateway Ltd
-# 4 January 2025
+# 24 August 2026
 
-# Version 1.0
-FROM debian:bookworm
+# Version 2.0
+FROM debian:trixie
 
-RUN echo "Building Agility Container Version 1.0"
+RUN echo "Building Agility Container Version 2.0"
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -23,7 +23,7 @@ RUN apt-get install -y \
   nano \
   xinetd \
   file  \
-  libtinfo5 \
+  libtinfo6 \
   lsb-release \
   lsof \
   libelf1 \
@@ -32,7 +32,7 @@ RUN apt-get install -y \
   libicu-dev \
   libssl-dev \
   libicu-dev \
-  libpcre3-dev \
+  libpcre2-dev \
   zlib1g-dev \
   libgd-dev \
   locales \
@@ -50,6 +50,7 @@ RUN mkdir -p /opt/agility \
  && mkdir /opt/agility/m
 
 WORKDIR /opt/agility
+RUN echo 'Copy files'
 COPY ./files /opt/agility
 
 RUN locale-gen "en_US.UTF-8"
@@ -57,8 +58,6 @@ RUN locale-gen "en_US.UTF-8"
 RUN mkdir -p /var/www/html
 
 # Get mg-web
-
-RUN echo 'Install nginx'
 
 RUN git clone https://github.com/chrisemunt/mg_web  \
  && cp /opt/agility/mg_web/src/*.h /opt/mg_web \
@@ -80,10 +79,12 @@ RUN cd /opt/agility \
  && chmod +x g \
  && chmod +x gd
 
+# Install NGINX
+
 RUN cd /opt \
-  && wget https://nginx.org/download/nginx-1.27.1.tar.gz \
-  && tar zxf nginx-1.27.1.tar.gz \
-  && cd nginx-1.27.1 \
+  && wget https://nginx.org/download/nginx-1.30.4.tar.gz \
+  && tar zxf nginx-1.30.4.tar.gz \
+  && cd nginx-1.30.4 \
   && CFLAGS=-Wno-error ./configure --prefix=/var/www/html --sbin-path=/usr/sbin/nginx --conf-path=/etc/nginx/nginx.conf --http-log-path=/var/log/nginx/access.log --error-log-path=/var/log/nginx/error.log --with-pcre --lock-path=/var/lock/nginx.lock --pid-path=/var/run/nginx.pid --with-http_ssl_module --with-http_image_filter_module=dynamic --modules-path=/etc/nginx/modules --with-http_v2_module --with-stream=dynamic --with-http_addition_module --with-http_mp4_module --with-threads --add-module=/opt/mg_web \
   && make \
   && make install
@@ -98,7 +99,7 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | b
   && echo 'export NVM_DIR="$HOME/.nvm"' >> .bashrc \
   && echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm' >> .bashrc \
   && export NVM_DIR="$HOME/.nvm" \
-  && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" \  && nvm install 22 \
+  && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" \  && nvm install 24 \
   && npm install qoper8-fastify mg-bun-router glsdb mg-dbx-napi @fastify/static mgw-router mg_web_js json5 redis \
   && npm install autocannon -g
 
@@ -118,9 +119,9 @@ RUN mkdir /tmp/tmp \
   && chmod +x ydbinstall.sh \
   && ./ydbinstall.sh --utf8 default --verbose --force-install \
   && export ydb_gbldir=/opt/yottadb/yottadb.gld \
-  && /usr/local/lib/yottadb/r202/mumps -run ^GDE < /opt/agility/gde.txt \
-  && /usr/local/lib/yottadb/r202/mupip create \
-  && /usr/local/lib/yottadb/r202/mupip extend -blocks=48000 DEFAULT
+  && /usr/local/lib/yottadb/r206/mumps -run ^GDE < /opt/agility/gde.txt \
+  && /usr/local/lib/yottadb/r206/mupip create \
+  && /usr/local/lib/yottadb/r206/mupip extend -blocks=48000 DEFAULT
 
 # Install and configure the network mgsi interface code to allow
 # network access to YottaDB (default setup uses
@@ -129,14 +130,14 @@ RUN mkdir /tmp/tmp \
 RUN git clone https://github.com/chrisemunt/mgsi /opt/agility/mgsi \
   && cp /opt/agility/mgsi/yottadb/* /opt/agility/m \
   && /opt/agility/ydb_run_temp ylink^%zmgsi \
-  && cp /opt/agility/mgsi/unix/zmgsi.ci /usr/local/lib/yottadb/r202
+  && cp /opt/agility/mgsi/unix/zmgsi.ci /usr/local/lib/yottadb/r206
 
-RUN cp /opt/agility/mgsi/unix/zmgsi_ydb /usr/local/lib/yottadb/r202 \
+RUN cp /opt/agility/mgsi/unix/zmgsi_ydb /usr/local/lib/yottadb/r206 \
   && cp /opt/agility/mgsi/unix/zmgsi_xinetd /etc/xinetd.d/zmgsi_xinetd \
-  && cp /opt/agility/mgsi/unix/zmgsi.ci /usr/local/lib/yottadb/r202 \
-  && sed -i 's/130/202/g' /etc/xinetd.d/zmgsi_xinetd \
-  && sed -i 's/130/202/g' /usr/local/lib/yottadb/r202/zmgsi_ydb \
-  && sed -i 's/1.30/2.02/g' /usr/local/lib/yottadb/r202/zmgsi_ydb \
+  && cp /opt/agility/mgsi/unix/zmgsi.ci /usr/local/lib/yottadb/r206 \
+  && sed -i 's/130/206/g' /etc/xinetd.d/zmgsi_xinetd \
+  && sed -i 's/130/206/g' /usr/local/lib/yottadb/r206/zmgsi_ydb \
+  && sed -i 's/1.30/2.06/g' /usr/local/lib/yottadb/r206/zmgsi_ydb \
   && echo "zmgsi_xinetd          7041/tcp                        # zmgsi" >> /etc/services \
   && rm -r /opt/agility/mgsi
 
@@ -145,8 +146,8 @@ RUN cp /opt/agility/mgsi/unix/zmgsi_ydb /usr/local/lib/yottadb/r202 \
 RUN cd /opt/agility \
   && rm gde.txt \
   && rm ydb_run_temp \
-  && rm -r /opt/nginx-1.27.1/ \
-  && rm /opt/nginx-1.27.1.tar.gz
+  && rm -r /opt/nginx-1.30.4/ \
+  && rm /opt/nginx-1.30.4.tar.gz
 
 RUN updatedb
 

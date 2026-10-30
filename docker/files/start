@@ -21,9 +21,9 @@ if [ -d "/opt/agility/mapped" ]; then
   ln -s /opt/agility/mapped/ydb_data/yottadb.gld /opt/yottadb/yottadb.gld
 
   export ydb_gbldir=/opt/yottadb/yottadb.gld
-  /usr/local/lib/yottadb/r202/mupip rundown -region default
-  /usr/local/lib/yottadb/r202/mupip set -key_size=1019 -region default
-  /usr/local/lib/yottadb/r202/mupip set -record_size=1048576 -region default
+  /usr/local/lib/yottadb/r206/mupip rundown -region default
+  /usr/local/lib/yottadb/r206/mupip set -key_size=1019 -region default
+  /usr/local/lib/yottadb/r206/mupip set -record_size=1048576 -region default
 
   echo "Note: Data saved in YottaDB will persist in your mapped folder"
 
@@ -41,6 +41,10 @@ else
 fi
 
 ./nginx start
-nohup node /opt/agility/mgweb_server.mjs >> /opt/agility/mapped/mgweb/mgweb_server.log 2>&1 &
+echo "starting mgweb JS listener"
+# nohup node run /opt/agility/mgweb_server.mjs > /opt/agility/mapped/mgweb/mgweb_server.log 2>&1 &
+# pm2 start --interpreter ~/.bun/bin/bun /opt/agility/mgweb_server.mjs --name mgweb-listener --silent
 
+nohup /root/.bun/bin/bun /opt/agility/mgweb_server.mjs > /opt/agility/mapped/logs/mgweb_server.log 2>&1 &
+echo "mgweb JS listener started"
 

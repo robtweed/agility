@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 
 export ydb_gbldir=/opt/agility/mapped/ydb_data/yottadb.gld
-/usr/local/lib/yottadb/r202/mupip rundown -region default
+/usr/local/lib/yottadb/r206/mupip rundown -region default
 

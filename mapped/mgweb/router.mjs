@@ -498,7 +498,6 @@ router.get('/agility/config/:category', (Request, ctx) => {
     if (!data.key) data.key = '';
   }
 
-
   return {
     payload: {
       data: data
@@ -511,6 +510,7 @@ router.post('/agility/config/:category', (Request, ctx) => {
   let fieldNames = {
     solisCloud: ['endpoint', 'key', 'secret', 'inverterSn'],
     octopus: ['zone', 'url1', 'url2'],
+    octopusexport: ['xurl1'],
     battery: ['storage', 'chargeCurrent', 'dischargeCurrent', 'chargeLimit', 'minimumLevel'],
     solcast: ['endpoint', 'key'],
     axle: ['endpoint', 'key'],
@@ -1253,6 +1253,96 @@ router.get('/agility/octopus/disableCustomTariff', (Request, ctx) => {
   };
 
 });
+
+router.get('/agility/octopus/isAgileExportEnabled', (Request, ctx) => {
+
+  console.log('is agile export enabled');
+
+  return {
+    payload: {
+     enabled: agility.octopus.agileExportEnabled
+    }
+  };
+
+});
+
+router.get('/agility/octopus/enableAgileExport', (Request, ctx) => {
+
+  agility.octopus.enableAgileExport();
+
+  return {
+    payload: {
+      ok: true
+    }
+  };
+
+});
+
+router.get('/agility/octopus/disableAgileExport', (Request, ctx) => {
+
+  agility.octopus.disableAgileExport();
+
+  return {
+    payload: {
+      ok: true
+    }
+  };
+
+});
+
+router.get('/agility/octopus/agileexportconfig', (Request, ctx) => {
+
+  return {
+    payload: {
+      minMargin: agility.octopus.minimumMargin,
+      alwaysBuyMargin: agility.octopus.alwaysBuyMargin,
+      minPrice: agility.octopus.minimumExportPrice
+    }
+  };
+
+});
+
+router.post('/agility/octopus/agileexportconfig', (Request, ctx) => {
+
+  let body = Request.body;
+
+  if (!body) {
+    return {
+      payload: {
+        error: 'Missing or empty body'
+      }
+    };
+  }
+
+  agility.octopus.minimumMargin = body.minMargin || 7;
+  agility.octopus.alwaysBuyMargin = body.alwaysBuyMargin || 20;
+  agility.octopus.minimumExportPrice = body.minPrice || 12;
+
+  return {
+    payload: {
+      ok: true
+    }
+  };
+
+});
+
+
+
+router.get('/agility/octopus/bestExportSlotsNow', (Request, ctx) => {
+
+  agility.octopus.sortAgileExportSlots();
+
+  return {
+    payload: {
+      slots: agility.octopus.bestExportPrices,
+      slotFrom: agility.date.now().slotTimeText,
+      untilTomorrow: agility.octopus.tomorrowsExportTariffsAvailable
+    }
+  };
+
+});
+
+
 
 router.get('/agility/isPeakExportEnabled', (Request, ctx) => {
 

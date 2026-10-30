@@ -34,9 +34,16 @@ export function load() {
             _this.toast.display(json.error);
           }
           else if (json.updateAvailable) {
+            if (json.updateAvailable.updateContainer) {
+              _this.cardText1.rootElement.textContent = 'Agility Version ' +  json.updateAvailable.latestVersion + 'is available';
+              _this.cardText2.rootElement.textContent = 'You must update the Agility Container to install it';
+              _this.updateBtn.hide();
+            }
+            else {
               _this.cardText1.rootElement.textContent = 'You are currently running version ' + json.updateAvailable.currentVersion;
               _this.cardText2.rootElement.textContent = 'Update Agility to version ' + json.updateAvailable.latestVersion;
               _this.updateBtn.show();
+            }
           }
           else {
             _this.cardText1.rootElement.textContent = 'You are running the latest version of Agility';

@@ -25,7 +25,7 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
- 27 March 2026
+ 29 September 2026
 
  */
 
@@ -154,6 +154,12 @@ let Agility = class {
     this.config.$(['operation', 'chargingEnabled']).delete();
   }
 
+  get isPeakTime() {
+    let hour = this.date.now().hour;
+    return (hour > 15 && hour < 19);
+  }
+
+
   get peakExportEnabled() {
     // disabled by default
     let peakExport = this.config.$(['operation', 'peakExportEnabled']);
@@ -171,6 +177,14 @@ let Agility = class {
 
   get now() {
     return date.now().timeText;
+  }
+
+  get isPrePeakProductionTime() {
+    let now = this.date.now();
+    //if (now.timeIndex < this.solcast.firstProductionTime.timeIndex) return false;
+    //if (now.hour > 0) return false;
+    if (now.hour > 15) return false;
+    return true;
   }
 
   clearAllData() {
@@ -256,10 +270,10 @@ let Agility = class {
   clearLogs() {
     fs.copyFileSync('/opt/agility/mapped/logs/agility.log', '/opt/agility/mapped/logs/agility.log.bak');
     fs.truncateSync('/opt/agility/mapped/logs/agility.log');
-    fs.copyFileSync('/opt/agility/mapped/mgweb/mgweb.log', '/opt/agility/mapped/mgweb/mgweb.log.bak');
-    fs.truncateSync('/opt/agility/mapped/mgweb/mgweb.log');
-    fs.copyFileSync('/opt/agility/mapped/mgweb/mgweb_server.log', '/opt/agility/mapped/mgweb/mgweb_server.log.bak');
-    fs.truncateSync('/opt/agility/mapped/mgweb/mgweb_server.log');
+    fs.copyFileSync('/opt/agility/mapped/logs/mgweb.log', '/opt/agility/mapped/logs/mgweb.log.bak');
+    fs.truncateSync('/opt/agility/mapped/logs/mgweb.log');
+    fs.copyFileSync('/opt/agility/mapped/logs/mgweb_server.log', '/opt/agility/mapped/logs/mgweb_server.log.bak');
+    fs.truncateSync('/opt/agility/mapped/logs/mgweb_server.log');
   }
 
   addTask(task) {
@@ -323,10 +337,19 @@ let Agility = class {
     if (newSlot) {
       this.clearTasks();
       this.addTask('updateOctopusTariffs');
+      if (this.octopus.agileExportEnabled) this.addTask('updateOutgoingAgileTariff');
       if (this.solcast.isEnabled) this.addTask('updateSolcastData');
       this.addTask('updateSolisData');
       if (this.axle.isEnabled) this.addTask('updateAxleData');
-      this.addTask('shouldBatteryBeCharged');
+      if (this.isPeakTime && this.octopus.agileExportEnabled) {
+        this.addTask('agileExport');
+      }
+      else if (this.isPrePeakProductionTime && this.octopus.agileExportEnabled) {
+        this.addTask('tryToFillBatteryBy4')
+      }
+      else {
+        this.addTask('shouldBatteryBeCharged');
+      }
       if (now.slotTimeText === '00:00') {
         // started a new day
         this.addTask('cleardownInfo');
@@ -395,7 +418,7 @@ let Agility = class {
   async shutdown() {
     this.logger.write('Agility instructed to shut down');
     this.removeTask('stop');
-    let ignore = ['agilityLog', 'agilityControl'];
+    let ignore = ['agilityLog', 'agilityControl', 'sortGlobal'];
     this.backup.now(ignore, 'agility.bak'); 
     clearInterval(this.timer);
     await this.sleep(2000);
@@ -454,6 +477,7 @@ let Agility = class {
 
     setTimeout(async function() {
       await _this.octopus.getLatestTariffTable(-1);
+      if (_this.octopus.agileExportEnabled) await _this.octopus.getLatestAgileExportTariffTable()
     }, 100);
 
     return ok;
@@ -595,7 +619,8 @@ let Agility = class {
     if (latestVersion > currentVersion) {
       return {
         latestVersion: latestVersion,
-        currentVersion: currentVersion
+        currentVersion: currentVersion,
+        updateContainer: json.updateContainer || false
       };
     }
     return false;

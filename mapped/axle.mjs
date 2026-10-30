@@ -25,7 +25,7 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
- 1 April 2026
+ 3 October 2026
 
 */
 
@@ -99,6 +99,18 @@ let Axle = class {
 
   deletePowerAdjustment() {
     this.document.$('powerAdjustment').delete();
+    this.document.$('eventStart').delete();
+  }
+
+  set eventStart(dateObject) {
+    this.document.$('eventStart').document = dateObject;
+  }
+
+  get eventStart() {
+    let doc = this.document.$('eventStart');
+    if (doc.exists) {
+      return doc.document;
+    }
   }
 
   async request() {
@@ -181,6 +193,7 @@ let Axle = class {
       }
       else {
         let eventStart = this.agility.date.at(res.start_time);
+        this.eventStart = eventStart;
         let eventEnd = this.agility.date.at(res.end_time);
         this.logger.write('Impending Axle Event: ' + eventStart.day + '/' + eventStart.month + '/' + eventStart.year + ' from ' + eventStart.slotTimeText + ' until ' + eventEnd.slotTimeText);
         let now = this.agility.date.now();
@@ -190,6 +203,8 @@ let Axle = class {
           this.logger.write('Event starts at current Time Slot: start discharge');
           this.agility.addTask('inverterDischarge');
           this.agility.removeTask('shouldBatteryBeCharged');
+          this.agility.removeTask('agileExport');
+          this.agility.removeTask('tryToFillBatteryBy4');
           return {status: 'Axle Event Now: Discharge Battery'};
         }
         if (now.slotIndex > eventEnd.slotIndex) {

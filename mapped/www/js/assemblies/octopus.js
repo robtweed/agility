@@ -61,7 +61,9 @@ export function load() {
           }
           else {
             for (let name in json.data) {
-              _this.form.fieldsByName.get(name).value = json.data[name];
+              if (_this.form.fieldsByName.get(name)) {
+                _this.form.fieldsByName.get(name).value = json.data[name];
+              }
             }
           }
 

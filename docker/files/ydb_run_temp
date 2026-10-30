@@ -3,7 +3,7 @@
 export ydb_gbldir=/opt/yottadb/yottadb.gld
 export ydb_dir=/opt/yottadb
 export ydb_routines=/opt/agility/m
-export ydb_dist=/usr/local/lib/yottadb/r202
+export ydb_dist=/usr/local/lib/yottadb/r206
 
 $ydb_dist/mumps -run $1
 

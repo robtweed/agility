@@ -6,7 +6,7 @@ processes=$(pgrep mumps)
 if [ ! -z "${processes}" ] ; then
   for i in ${processes}
     do
-      /usr/local/lib/yottadb/r202/mupip stop ${i}
+      /usr/local/lib/yottadb/r206/mupip stop ${i}
     done
 fi
 

@@ -109,7 +109,8 @@ cd docker
 ./buildContainer
 ```
 
-It may take a while - let it run to completion
+It may take a while - let it run to completion.
+Ignore any warning message that you might see at the end of the build procedure.
 
 
 ## Step 8
@@ -162,7 +163,6 @@ behaviour (though you might have to wait until its next cycle of activity to see
 You shouldn't need to stop and restart Agility.
 
 If you do stop and restart Agility, it will simply carry on from before: no settings or data will be lost.
-
 
 
 

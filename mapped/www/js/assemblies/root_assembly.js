@@ -20,6 +20,7 @@ export function load(ctx) {
       <sbadmin-sidebar-menu-item iconName="clipboard" text="Activity Log" contentPage="log" />
       <sbadmin-sidebar-menu-item iconName="battery-charging" text="Current Power Status" contentPage="positionNow" />
       <sbadmin-sidebar-menu-item iconName="list" text="Cheapest Agile Slots" contentPage="slotsNow" />
+      <sbadmin-sidebar-menu-item iconName="list" text="Best Outgoing Agile Slots" contentPage="exportPrices" golgi:hook="isAgileExportEnabled"/>
       <sbadmin-sidebar-menu-item iconName="trending-up" text="Power Usage History" contentPage="solisUseHistory" />
       <sbadmin-sidebar-menu-item iconName="trending-up" text="Average Power Usage Profile" contentPage="solisProfile" />
     </sbadmin-sidebar-nested-menu>
@@ -38,6 +39,7 @@ export function load(ctx) {
       </sbadmin-sidebar-sub-menu>
       <sbadmin-sidebar-sub-menu text="Octopus">
         <sbadmin-sidebar-menu-item text="Octopus Agile" contentPage="octopus"/>
+        <sbadmin-sidebar-menu-item text="Octopus Outgoing Agile" contentPage="octopusOutgoing"/>
         <sbadmin-sidebar-menu-item text="Custom Tariff Builder" contentPage="tariffBuilder" />
       </sbadmin-sidebar-sub-menu>
       <sbadmin-sidebar-menu-item text="Axle Energy" contentPage="axle"/>
@@ -58,5 +60,24 @@ export function load(ctx) {
 </sbadmin-root>
   `;
 
-  return {gx};
+  let hooks = {
+    'sbadmin-sidebar-menu-item': {
+      isAgileExportEnabled: async function() {
+        let contentPage = this.getParentComponent('sbadmin-root');
+        let json = await this.context.request('/agility/octopus/isAgileExportEnabled');
+        if (json.error) {
+          contentPage.toast.headerTxt = 'Error';
+          contentPage.toast.display(json.error);
+        }
+        if (json.enabled) {
+          this.show();
+        }
+        else {
+          this.hide();
+        }
+      }
+    }
+  };
+
+  return {gx, hooks};
 };

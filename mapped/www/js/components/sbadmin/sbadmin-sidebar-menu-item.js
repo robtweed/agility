@@ -40,6 +40,10 @@ a {
   display: inline-flex;
 }
 
+.d-none {
+  display: none !important;
+}
+
 *, ::before, ::after {
     box-sizing: border-box;
 }
@@ -108,6 +112,14 @@ a {
       this.renderIcon();
     }
 
+    show() {
+      this.rootElement.classList.remove('d-none');
+    }
+
+    hide() {
+      this.rootElement.classList.add('d-none');
+    }
+
     set isActive(active) {
       if (active) {
         this.aTag.classList.add('active');
@@ -123,15 +135,6 @@ a {
 
     setInactive() {
       this.aTag.classList.remove('active');
-    }
-
-    set isActive(active) {
-      if (active) {
-        this.aTag.classList.add('active');
-      }
-      else {
-        this.aTag.classList.remove('active');
-      }
     }
 
     switchToActive() {

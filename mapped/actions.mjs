@@ -25,7 +25,7 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
- 1 May 2026
+ 23 October 2026
 
  */
 
@@ -36,6 +36,9 @@ class Actions {
     this.fn = {
       updateOctopusTariffs: async function() {
         return await this.octopus.getLatestTariffTable();
+      },
+      updateOutgoingAgileTariff: async function() {
+        return await this.octopus.getLatestAgileExportTariffTable();
       },
       updateSolcastData: async function() {
         return await this.solcast.update();
@@ -49,6 +52,32 @@ class Actions {
       updateYesterdaysSolisData: async function() {
         return await this.solis.update(-1);
       },
+      agileExport: function() {
+        let discharge = this.battery.shouldAgileExport;
+        if (discharge) {
+          this.addTask('inverterDischarge');
+        }
+        else {
+          this.addTask('shouldBatteryBeDischarged');
+          this.addTask('inverterReset');
+        }
+        return {discharge: discharge};
+      },
+      tryToFillBatteryBy4: function() {
+        let charge = this.battery.tryToFillBatteryBy4;
+        if (charge) {
+          this.addTask('inverterCharge');
+        }
+        else {
+          //this.addTask('inverterReset');
+          // If all available slots are too expensive to use for charging battery to 100%
+          // it may still be necessary to use the current slot to ensure net power needed by 22:30 is available
+          // so now run the standard shouldBatteryBeCharged task
+          //   This will be more relevant when PV generation is low, eg in winter
+          this.addTask('shouldBatteryBeCharged');
+        }
+        return {charge: charge};
+      },
       shouldBatteryBeCharged: function() {
         let charge = this.battery.shouldBeCharged;
         if (charge === 'charge') {
@@ -60,7 +89,6 @@ class Actions {
         else {
           this.addTask('shouldBatteryBeDischarged');
 
-          /*
           let now = this.date.now();
           this.logger.write('Check if peak time');
           this.logger.write('hour now: ' + now.hour);
@@ -79,7 +107,7 @@ class Actions {
             this.logger.write('Not peak time');
             this.addTask('shouldBatteryBeDischarged');
           }
-          */
+          
         }
         return {charge: charge};
       },
@@ -145,7 +173,7 @@ class Actions {
       },
 
       backup: function() {
-        let ignore = ['agilitySSE'];
+        let ignore = ['agilitySSE', 'sortGlobal'];
         this.backup.now(ignore, 'agility.bak');
         return {status: 'Backup completed'};
       },

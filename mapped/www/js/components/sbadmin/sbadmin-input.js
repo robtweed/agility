@@ -225,7 +225,7 @@ export function load(ctx) {
 label {
     display: inline-block;
 }
-label-hidden {
+.label-hidden {
     display: none;
 }
 

@@ -7,7 +7,7 @@ if [ ! -z "${processes}" ] ; then
   # echo "Stopping any remaining M processes nicely"
   for i in ${processes}
     do
-      /usr/local/lib/yottadb/r202/mupip stop ${i}
+      /usr/local/lib/yottadb/r206/mupip stop ${i}
     done
 
   # Wait for process to react to mupip stop instead of force kill later
@@ -22,4 +22,4 @@ fi
 
 # Rundown the mumps database
 
-/usr/local/lib/yottadb/r202/mupip rundown -region default
+/usr/local/lib/yottadb/r206/mupip rundown -region default

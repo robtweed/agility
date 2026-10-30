@@ -4,7 +4,7 @@
  | Agility: Solar Battery Optimisation against Octopus Agile Tariff          |
  |           specifically for Solis Inverters                                |
  |                                                                           |
- | Copyright (c) 2024-25 MGateway Ltd,                                       |
+ | Copyright (c) 2024-26 MGateway Ltd,                                       |
  | Redhill, Surrey UK.                                                       |
  | All rights reserved.                                                      |
  |                                                                           |
@@ -25,7 +25,7 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
- 3 April 2025
+ 12 October 2026
 
 */
 
@@ -268,6 +268,7 @@ let Solcast = class {
       };
     }
     if (res.status !== 200) {
+      console.log(res);
       return {
         error: 'Solcast returned status code ' + res.status
       };
@@ -474,6 +475,7 @@ let Solcast = class {
     log = false;
     //
     let fromD = this.date.atTime(fromTimeText);
+    let toD = this.date.atTime(toTimeText);
     let dateIndex = fromD.dateIndex;
     let fromTimeIndex = fromD.slotTimeIndex;
     let todaysPredictions = this.predictions.$(dateIndex);
@@ -481,7 +483,6 @@ let Solcast = class {
     //this.logger.write('Solcast expectedPowerBetween: toTimeText = ' + toTimeText);
     //this.logger.write('Solcast expectedPowerBetween: dateIndex = ' + dateIndex);
     let total = 0;
-
     if (!override && this.octopus.tomorrowsTariffsAvailable) {
       // get today's total estimated power from now until 23:30
 
@@ -510,20 +511,34 @@ let Solcast = class {
       if (log) this.logger.write('Total prediction: ' + total.toFixed(2));
     }
     else {
-      // get today's total estimated power from now until end time
-      if (log) this.logger.write('Get Solcast prediction from ' + fromTimeText + ' until ' + toTimeText + ' today');
-      let pvAtStart = +todaysPredictions.$([fromTimeIndex, 'total']).value;
-      console.log('Solcast predictions from ' + fromTimeText + ' until ' + toTimeText + ' today');
-      console.log('fromTimeIndex: ' + fromTimeIndex + '; pvAtStart: ' + pvAtStart);
-      let d = this.date.atTime(toTimeText);
-      let pvAtEnd = +todaysPredictions.$([d.slotTimeIndex, 'total']).value;
-      console.log('d.slotTimeIndex: ' + d.slotTimeIndex + '; pvAtEnd: ' + pvAtEnd);
-      total = pvAtEnd - pvAtStart;
-      if (log) this.logger.write('Prediction: ' + total.toFixed(2));
+      if (toD.timeIndex < fromD.timeIndex) {
+        let pvAtStart = todaysPredictions.$([fromTimeIndex, 'total']).value;
+        let pvAtEnd = todaysPredictions.lastChild.$('total').value;
+        total = pvAtEnd - pvAtStart;
+        this.logger.write('Prediction today: ' + total.toFixed(2));
+        let tomorrowDateIndex = this.date.atMidnight(1).dateIndex;
+        let d = this.date.atTime(toTimeText, tomorrowDateIndex);
+        let pv = +this.predictions.$([tomorrowDateIndex, d.timeIndex, 'total']).value;
+        this.logger.write('Prediction tomorrow: ' + pv.toFixed(2));
+         total += pv;
+      }
+      else {
+        // get today's total estimated power from now until end time
+        console.log('fromTimeIndex: ' + fromTimeIndex);
+        if (log) this.logger.write('Get Solcast prediction from ' + fromTimeText + ' until ' + toTimeText + ' today');
+        let pvAtStart = +todaysPredictions.$([fromTimeIndex, 'total']).value;
+        //this.logger.write('Solcast predictions from ' + fromTimeText + ' until ' + toTimeText + ' today');
+        //this.logger.write('fromTimeIndex: ' + fromTimeIndex + '; pvAtStart: ' + pvAtStart);
+        let d = this.date.atTime(toTimeText);
+        let pvAtEnd = +todaysPredictions.$([d.slotTimeIndex, 'total']).value;
+        //this.logger.write('d.slotTimeIndex: ' + d.slotTimeIndex + '; pvAtEnd: ' + pvAtEnd);
+        total = pvAtEnd - pvAtStart;
+        //this.logger.write('Prediction: ' + total.toFixed(2));
+      }
     }
     // apply adjustment
     if (adjust) {
-      console.log('applyimng adjustment');
+      console.log('applying adjustment');
       total = total + ((total * this.adjustment) / 100);
       if (log) this.logger.write('Prediction after adjustment: ' + total.toFixed(2));
     }

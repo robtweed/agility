@@ -104,7 +104,7 @@ export function load(ctx) {
 label {
     display: inline-block;
 }
-label-hidden {
+.label-hidden {
     display: none;
 }
 
@@ -117,6 +117,7 @@ label-hidden {
 
 <div>
   <div golgi:prop="label"></div>
+  <br golgi:prop="lnBreak" />
   <div golgi:prop="childrenTarget"></div>
 </div>
   `;
@@ -137,10 +138,15 @@ label-hidden {
         let cb = await this.renderComponent('sbadmin-checkbox', this.childrenTarget, this.context);
         this.emit('cbReady', cb);
         cb.value = state.value;
+
         if (state.label) {
           cb.labelText = state.label;
         }
-        if (state.title) {
+        if (typeof state.title === 'undefined') {
+          this.label.className = 'label-hidden';
+          this.lnBreak.className = 'label-hidden';
+        }
+        else {
           this.label.textContent = state.title;
         }
         if (state.switch) {

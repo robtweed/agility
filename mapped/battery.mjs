@@ -25,7 +25,7 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
- 23 April 2026
+ 30 October 2026
 
  */
 
@@ -148,7 +148,7 @@ class Battery {
         let data = timeNode.document;
         let start = +data.start;
         let end = +data.end;
-        console.log('start: ' + start + '; end: ' + end);
+        //console.log('start: ' + start + '; end: ' + end);
         if (end > _this.minimumLevel) {
           let startMinute = data.startMinute || 0;
           startMinute = +startMinute;
@@ -253,7 +253,24 @@ class Battery {
       }
     }
     else {
-      averageExpectedPower = this.solis.averagePowerBetween(fromTimeText, toTimeText);
+      let fromD = this.date.atTime(fromTimeText, this.date.now.timeIndex);
+      let toD = this.date.atTime(toTimeText, this.date.now.timeIndex);
+      if (toD.timeIndex > fromD.timeIndex) {
+        averageExpectedPower = this.solis.averagePowerBetween(fromTimeText, toTimeText);
+      }
+      else {
+        let power1 = this.solis.averagePowerBetween(fromTimeText, '23:50');
+        if (log) this.logger.write('Expected power from ' + fromTimeText + ' until 23:50:');
+        if (log) this.logger.write(JSON.stringify(power1));
+        let power2 = this.solis.averagePowerBetween('00:01', toTimeText);
+        if (log) this.logger.write('Expected power from midnight until ' + toTimeText + ':');
+        if (log) this.logger.write(JSON.stringify(power2));
+        averageExpectedPower = {
+          load: (+power1.load + +power2.load).toFixed(2),
+          pv: (+power1.pv + +power2.pv).toFixed(2),
+        }
+
+      }
     }
     if (log) this.logger.write('Expected power use between ' + fromTimeText + ' and ' + toTimeText + ': ')
     if (log) this.logger.write(JSON.stringify(averageExpectedPower));
@@ -387,6 +404,202 @@ class Battery {
     }
   }
 
+  get shouldAgileExport() {
+    // if previous slot charged battery,save the new battery level
+    this.solis.endChargeHistoryRecord();
+    //
+    // if previous slot discharged battery,save the new battery level
+    this.solis.endDischargeHistoryRecord();
+    //
+    this.logger.write('Should Agile Export Logic begins...');
+    let positionNow = this.positionNow();
+
+    /*
+     If tomorrow's import prices are available, and tomorrow's cheapest import slots (to 4pm)
+      are more expensive than today's best export price, retain what's in the battery and dont discharge today
+    */
+    this.logger.write('Check import prices tomorrow');
+    this.logger.write('positionNow.untilTomorrow: ' + positionNow.untilTomorrow);
+    if (positionNow.untilTomorrow) {
+      this.octopus.sortSlots('15:30');
+      let slots = this.octopus.cheapestSlotArray;
+      let cheapestImportPrice = slots[0].price;
+      let bestExportPriceToday = this.octopus.bestAgileExportSlotPrice;
+      this.logger.write('Best Export Price today: ' + bestExportPriceToday);
+      this.logger.write('Cheapest Import Price Tomorrow: ' + cheapestImportPrice);
+      if (bestExportPriceToday < cheapestImportPrice) {
+        this.logger.write('Cheapest import price tomorrow is higher than best export price today, so dont discharge');
+        return false;
+      }
+    }
+    else {
+      this.logger.write('Prices for tomorrow not yet available');
+    }
+
+    //
+    // How many slots-worth of surplus energy is in the battery? (x)
+    // Is current slot one of the top x export price slots?
+    //  if so, discharge, otherwise do nothing
+    //
+
+    this.logger.write('How many slots, if any, can be discharged whilst leaving enough to last until PV generation begins');
+    let firstPVTime = this.solcast.firstProductionTime;
+    if (firstPVTime) {
+      let firstPVTimeIndex = firstPVTime.timeIndex + this.solis.productionDelay;
+      let firstPVTimeText = this.date.at(firstPVTimeIndex).timeText;
+      this.logger.write('Get net power requirements from now to First Production time: ' + firstPVTimeText);
+      let netPowerNeededTillFP = this.netPowerBetween(positionNow.slot, firstPVTimeText, false, true);
+      this.logger.write('Net power needed from now until ' + firstPVTimeText + ': ' + netPowerNeededTillFP);
+      this.logger.write('Current battery level: ' + positionNow.battery.level);
+      this.logger.write('Available power: ' + positionNow.battery.availablePower);
+      let axlePowerAdjustment = 0;
+      let axleEventStart = this.axle.eventStart;
+      if (axleEventStart) {
+        let afterPeak = this.date.atTime('19:00');
+        this.logger.write('afterPeak:');
+        this.logger.write(afterPeak);
+        this.logger.write('axleEventStart:');
+        this.logger.write(axleEventStart);
+        this.logger.write('firstPVTime');
+        this.logger.write(firstPVTime);
+        if (axleEventStart.timeIndex <= firstPVTime.timeIndex && axleEventStart.timeIndex >= afterPeak.timeIndex) {
+          this.logger.write('Axle event occurring after todays peak time and before time of first production');
+          axlePowerAdjustment = this.axle.powerAdjustment;
+        }
+        else {
+          this.logger.write('Axle event not occurring until after time of first production, so ignore');
+        }
+      }
+      else {
+        this.logger.write('No Axle event to cater for');
+      }
+      this.logger.write('Axle power adjustment: ' + axlePowerAdjustment);
+      let surplus = positionNow.battery.availablePower - netPowerNeededTillFP - axlePowerAdjustment;
+      this.logger.write('Surplus in battery: ' + surplus + 'kWh');
+      let dischargePC = this.percentDecreasePerDischarge;
+      this.logger.write('Average percentage drop per discharge: ' + dischargePC);
+      let powerUsedPerDischarge =  this.powerFromPercentage(dischargePC);
+      this.logger.write('which represents ' + powerUsedPerDischarge + ' kWh');
+      let noOfSlots = Math.round(surplus/powerUsedPerDischarge);
+      this.logger.write('So surplus is equivalent to ' + noOfSlots + ' slots');
+
+      if (noOfSlots <= 0) {
+        this.logger.write('No surplus to export');
+        return false;
+      }
+      // is this one of the best x export slots?
+      this.octopus.sortAgileExportSlots('19:00');
+      let slots = this.octopus.bestExportPrices;
+      slots.length = noOfSlots;
+      //console.log('best slots:');
+      //console.log(slots);
+      //console.log(positionNow);
+      let found = false;
+      for (let slot of slots) {
+        if (slot.time === positionNow.slot) {
+          found = true;
+          break;
+        }
+      }
+      if (found) {
+        this.logger.write('Curent slot is one of the best ' + noOfSlots + ' export slots, so discharge now');
+        return true;
+      }
+      this.logger.write('Curent slot is not one of the best ' + noOfSlots + ' export slots, so dont discharge now');
+      return false;
+    }
+    else {
+      this.logger.write('Unable to calculate first production time, so dont do anything');
+      return false;
+    }
+  }
+
+  get tryToFillBatteryBy4() {
+    // if previous slot charged battery,save the new battery level
+    this.solis.endChargeHistoryRecord();
+    //
+    // if previous slot discharged battery,save the new battery level
+    this.solis.endDischargeHistoryRecord();
+    //
+    this.logger.write('Try to fill battery by 4pm Logic begins...');
+
+    if (this.levelNow > 98) {
+      this.logger.write('Battery is already full');
+      return false;
+    }
+
+    this.logger.write('Current slot price: ' + this.octopus.priceNow);
+
+    if (this.octopus.priceNow <= 0) {
+      this.logger.write('Current slot price is at or below zero: use this slot to charge battery');
+      this.agility.setChargingStartedFlag();
+      return true;
+    }
+
+    this.logger.write('Best Export price: ' + this.octopus.bestAgileExportSlotPrice);
+
+    if (this.octopus.priceNow >= this.octopus.bestAgileExportSlotPrice) {
+      this.logger.write('Current slot is at or above the best export slot price: dont use this slot');
+      return false;
+    }
+
+    this.logger.write('Agile Import/Export margin for this slot: ' + this.octopus.agileImportExportMargin);
+    this.logger.write('Always buy margin: ' + this.octopus.alwaysBuyMargin);
+    if (this.octopus.agileImportExportMargin >= this.octopus.alwaysBuyMargin) {
+      this.logger.write('Current slot price is at or above the always buy margin: use this slot to charge battery');
+      this.agility.setChargingStartedFlag();
+      return true;
+    }
+    if (this.octopus.agileImportExportMargin < this.octopus.minimumMargin) {
+      this.logger.write('Insufficient margin to warrant charging using current slot');
+      return false;
+    }
+    //
+    let positionNow = this.positionNow();
+
+    this.logger.write('Current battery level: ' + positionNow.battery.level);
+    let batteryShortfallPC = 100 - positionNow.battery.level;
+    if (batteryShortfallPC === 0) return false;
+
+    this.logger.write('shortfall: ' + batteryShortfallPC + '%');
+    let shortfallPower = this.powerFromPercentage(batteryShortfallPC);
+    this.logger.write('...which equates to ' + shortfallPower + ' kWh');
+
+    // what is net power expectation between now and 4pm?
+    let netPowerBy4 = this.netPowerBetween(positionNow.slot, '16:00', false, true);
+    this.logger.write('net power expectation between now and 4pm: ' + netPowerBy4);
+    let neededBy4 = shortfallPower + netPowerBy4;
+    if (neededBy4 > 0) {
+      this.logger.write('Topup needed: ' + neededBy4 + 'kWh');
+      let noOfChargeSlotsNeeded = Math.round(neededBy4 / positionNow.battery.powerAddedPerCharge);
+      //console.log('Charge slots needed: ' + noOfChargeSlotsNeeded);
+      if (noOfChargeSlotsNeeded > 0) {
+        // is this one of the cheapest x slots?
+        this.octopus.sortSlots('16:00');
+        let slots = this.octopus.cheapestSlotArray;
+        slots.length = noOfChargeSlotsNeeded;
+        let useSlot = false;
+        for (let slot of slots) {
+          if (slot.timeText === positionNow.slot) {
+            useSlot = true;
+            break;
+          }
+        }
+        if (useSlot) {
+          this.logger.write('Current slot is one of the cheapest ' + noOfChargeSlotsNeeded + ' slots, so use it');
+          this.agility.setChargingStartedFlag();
+          return true;
+        }
+        else {
+          this.logger.write('Current slot is not one of the cheapest ' + noOfChargeSlotsNeeded + ' slots, so dont use it');
+          return false;
+        }
+      }
+    }
+    this.logger.write('No topup needed: enough net PV generation predicted to charge battery by 4pm');
+    return false;
+  }
+
   get shouldBeCharged() {
     // if previous slot charged battery,save the new battery level
     this.solis.endChargeHistoryRecord();
@@ -396,6 +609,7 @@ class Battery {
     //
     let obj = this.availableSlotsByPrice(true);
 
+    this.logger.write('Standard Should Be Charged Logic begins now');
     let slots = obj.slots;
     let positionNow = obj.positionNow;
 
@@ -496,6 +710,14 @@ class Battery {
     let positionNow = this.positionNow(false);
 
     this.logger.write('Should battery discharge during this slot?');
+
+    // if agile export enabled and export price is at or below the minimum to use, dont discharge
+                
+    if (this.octopus.agileExportEnabled && this.octopus.agileExportPriceNow <= this.octopus.minimumExportPrice) {
+      this.logger.write('Current export price of ' + this.octopus.agileExportPriceNow + ' is at or below the minimum: ' + this.octopus.minimumExportPrice + ': dont discharge');
+      return false;
+    }
+
     this.logger.write('Position Now:');
     this.logger.write(positionNow);
 
@@ -510,6 +732,8 @@ class Battery {
       let now = this.date.now();
       this.octopus.sortSlots();
       let slots = this.octopus.cheapestSlotArray;
+      //this.logger.write('slots:');
+      //this.logger.write(slots);
       let earliestSlotTime = 5000000000000;
       let timeText = '';
       for (let slot of slots) {
@@ -558,12 +782,19 @@ class Battery {
           this.logger.write('Discharge possible, but check time of first production...');
 
           let firstPVTime = this.solcast.firstProductionTime;
+          //this.logger.write('** firstPVTime:');
+          //this.logger.write(firstPVTime);
           if (firstPVTime) {
             let firstPVTimeIndex = firstPVTime.timeIndex + this.solis.productionDelay;
             let firstPVTimeText = this.date.at(firstPVTimeIndex).timeText;
             let firstPVTimeToday = this.date.atTime(firstPVTimeText);
-            this.logger.write('firstPVTimeToday: ' + firstPVTimeToday.timeIndex);
-            this.logger.write('earliestSlotTime: ' + earliestSlotTime);
+            if (this.date.now().hour > 18) {
+              // make sure we use tomorrows first production time
+              firstPVTimeToday = this.date.atTime(firstPVTimeText, firstPVTimeIndex);
+            }
+            //this.logger.write('firstPVTimeToday: ' + firstPVTimeToday.timeIndex);
+            //this.logger.write(firstPVTimeToday);
+            //this.logger.write('earliestSlotTime: ' + earliestSlotTime);
             if (earliestSlotTime > firstPVTimeToday.timeIndex) {
               this.logger.write('Earliest Always Buy slot is after time of first production...');
 
@@ -812,19 +1043,25 @@ class Battery {
       data.chargingDecision.reason = 'Slot price of ' + data.octopus.priceNow + ' is at or below Always Use price of ' + data.alwaysUsePrice;
       return data;
     }
-    if (this.agility.isTodaysAlwaysUsePriceSet && data.octopus.priceNow <= this.agility.todaysAlwaysUsePrice) {
-      data.chargingDecision.charge = 'charge';
-      data.chargingDecision.reason = 'Slot price of ' + data.octopus.priceNow + ' is at or below Todays Always Use price of ' + this.agility.todaysAlwaysUsePrice;
+    if (typeof data.chargeSlotsNeeded === 'undefined') {
+      data.chargingDecision.charge = false;
+      data.chargingDecision.reason = 'Unable to calculate battery level, probably due to comms issues';
       return data;
+    }
+    if (this.agility.isTodaysAlwaysUsePriceSet && data.octopus.priceNow <= this.agility.todaysAlwaysUsePrice) {
+      if (data.chargeSlotsNeeded > 0) {
+        data.chargingDecision.charge = 'charge';
+        data.chargingDecision.reason = 'Slot price of ' + data.octopus.priceNow + ' is at or below Todays Always Use price of ' + this.agility.todaysAlwaysUsePrice;
+        return data;
+      }
+      else {
+        this.logger.write('Slot price of ' + data.octopus.priceNow + ' is at or below Todays Always Use price of ' + this.agility.todaysAlwaysUsePrice);
+        this.logger.write('but no charge slots are needed, so it will be ignored');
+      }
     }
     if (data.battery.chargeLimit < 100 && data.battery.level >= data.battery.chargeLimit) {
       data.chargingDecision.charge = false;
       data.chargingDecision.reason = 'Battery level is already at its charge limit of ' + data.battery.chargeLimit;
-      return data;
-    }
-    if (typeof data.chargeSlotsNeeded === 'undefined') {
-      data.chargingDecision.charge = false;
-      data.chargingDecision.reason = 'Unable to calculate battery level, probably due to comms issues';
       return data;
     }
     if (data.chargeSlotsNeeded === 0) {
