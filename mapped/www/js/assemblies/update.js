@@ -35,7 +35,7 @@ export function load() {
           }
           else if (json.updateAvailable) {
             if (json.updateAvailable.updateContainer) {
-              _this.cardText1.rootElement.textContent = 'Agility Version ' +  json.updateAvailable.latestVersion + 'is available';
+              _this.cardText1.rootElement.textContent = 'Agility Version ' +  json.updateAvailable.latestVersion + ' is available';
               _this.cardText2.rootElement.textContent = 'You must update the Agility Container to install it';
               _this.updateBtn.hide();
             }

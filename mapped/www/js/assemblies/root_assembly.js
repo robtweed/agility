@@ -21,8 +21,9 @@ export function load(ctx) {
       <sbadmin-sidebar-menu-item iconName="battery-charging" text="Current Power Status" contentPage="positionNow" />
       <sbadmin-sidebar-menu-item iconName="list" text="Cheapest Agile Slots" contentPage="slotsNow" />
       <sbadmin-sidebar-menu-item iconName="list" text="Best Outgoing Agile Slots" contentPage="exportPrices" golgi:hook="isAgileExportEnabled"/>
-      <sbadmin-sidebar-menu-item iconName="trending-up" text="Power Usage History" contentPage="solisUseHistory" />
-      <sbadmin-sidebar-menu-item iconName="trending-up" text="Average Power Usage Profile" contentPage="solisProfile" />
+      <sbadmin-sidebar-menu-item iconName="trending-up" text="Energy Usage History" contentPage="solisUseHistory" />
+      <sbadmin-sidebar-menu-item iconName="trending-up" text="Average Energy Usage Profile" contentPage="solisProfile" />
+      <sbadmin-sidebar-menu-item iconName="trending-up" text="Solcast Predictions" contentPage="solcastPredictions" />
     </sbadmin-sidebar-nested-menu>
 
     <sbadmin-sidebar-nested-menu iconName="user-check" text="Manual Control">

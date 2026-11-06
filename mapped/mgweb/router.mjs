@@ -350,6 +350,45 @@ router.get('/agility/solcast/predictionHistory', (Request, ctx) => {
 
 });
 
+router.get('/agility/solcast/data/availableDates', (Request, ctx) => {
+
+  if (!agility.solcast.isConfigured) {
+    return {
+      payload: {
+        error: 'Solcast Configuration is incomplete, so request ignored'
+      }
+    };
+  }
+
+  return {
+    payload: {
+      dates: agility.solcast.availableDates
+    }
+  };
+
+});
+
+router.get('/agility/solcast/data/prediction/:dateIndex', (Request, ctx) => {
+
+  let dateIndex = Request.params.dateIndex;
+
+  if (!agility.solcast.isConfigured) {
+    return {
+      payload: {
+        error: 'Solcast Configuration is incomplete, so request ignored'
+      }
+    };
+  }
+
+  return {
+    payload: {
+      prediction: agility.solcast.prediction(dateIndex)
+    }
+  };
+
+});
+
+
 router.get('/agility/axle/isenabled', (Request, ctx) => {
 
   return {
@@ -593,6 +632,9 @@ router.post('/agility/config/:category', (Request, ctx) => {
     };
   }
 
+  if (category === 'octopusexport') {
+    category = 'octopus';
+  }
   agility.config.$(category).document = data;
 
   return {

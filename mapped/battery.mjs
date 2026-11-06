@@ -25,7 +25,7 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
- 30 October 2026
+ 31 October 2026
 
  */
 
@@ -930,6 +930,7 @@ class Battery {
     let d = this.date.now();
     let fromTimeText = d.slotTimeText;
     let slotEndTimeText = this.date.at(d.slotEndTimeIndex).timeText;
+    let toTimeIndex = this.date.atTime(toTimeText).timeIndex;
     let isPeakTime = false;
     if (d.hour > 15 && d.hour < 19) isPeakTime = true;
     let solis;
@@ -945,7 +946,21 @@ class Battery {
     else {
       solis = this.solis.averagePowerBetween(fromTimeText, toTimeText, log);
     }
-    solis.load = +solis.load + this.axle.powerAdjustment;
+    let axleAdjustment = 0;
+    if (this.axle.powerAdjustment > 0) {
+      console.log('axle power adjustment: ' + this.axle.powerAdjustment);
+      console.log('axle event start timeIndex: ' + this.axle.eventStart.slotTimeIndex);
+      console.log('toTimeIndex: ' + toTimeIndex);
+      if (this.axle.eventStart.slotTimeIndex <= toTimeIndex) {
+        console.log('Axle event is at or before ' + toTimeText);
+        axleAdjustment = this.axle.powerAdjustment;
+      }
+      else {
+        console.log('Axle event is after ' + toTimeText + ' so ignored');
+      }
+    }
+    console.log('axleAdjustment: ' + axleAdjustment);
+    solis.load = +solis.load + axleAdjustment;
     if (ignorePV) solis.pv = 0;
     let pv = solis.pv;
     let solcast = {
@@ -981,7 +996,12 @@ class Battery {
       deficit = 0;
     }
     else {
+      console.log('Calculating deficit:');
+      console.log('solis.load: ' + solis.load);
+      console.log('batteryPower: ' + batteryPower);
+      console.log('pv: ' + pv);
       deficit = solis.load - batteryPower - pv;
+      console.log('deficit: ' + deficit);
     }
     let chargeSlots = 0;
     if (deficit > 0) chargeSlots = this.noOfSlotsToChargeBy(deficit, false);
@@ -994,7 +1014,7 @@ class Battery {
       slot: fromTimeText,
       slotEnd: slotEndTimeText,
       untilTomorrow: untilTomorrow,
-      calculationCutoffTime: this.calculationCutoffTime,
+      calculationCutoffTime: toTimeText,
       movingAveragePeriod: this.agility.movingAveragePeriod,
       solis: solis,
       solcast: solcast,

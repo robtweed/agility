@@ -25,7 +25,7 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
- 12 October 2026
+ 6 November 2026
 
 */
 
@@ -135,6 +135,28 @@ let Solcast = class {
     this.config.$('autoAdjust').delete();
   }
 
+  get availableDates() {
+    let dates = [];
+    let _this = this;
+    this.predictions.forEachChildNode(function(dateNode) {
+      let dateIndex = dateNode.key;
+      let d = _this.date.at(dateIndex);
+      dates.push({
+        dateIndex: dateIndex,
+        dateText: d.dayText + '/' + d.monthText + '/' + d.year
+      });
+    });
+    return dates;
+  }
+
+  prediction(dateIndex) {
+    let prediction = [];
+    let _this = this;
+    this.predictions.$(dateIndex).forEachChildNode(function(timeNode) {
+      prediction.push(timeNode.document)
+    });
+    return prediction;
+  }
 
   calculateAdjustment() {
 
