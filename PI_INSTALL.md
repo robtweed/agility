@@ -148,10 +148,10 @@ http://192.168.1.100:8080
 Before attempting to start Agility, you'll need to edit its initial default configuration.  It will refuse to start until 
 you have a complete set of configuration settings.  Use the Configuration menu options.
 
-When you have everything configured, you can try out Agility: select the *System Status* menu option and click the
-*Start* button.
+When you have everything configured, you can try out Agility: select the *Start/Stop Agility* menu option and click the
+*Start Agility* button.
 
-Use the *Activity Log* menu option to see what Agility is doing.
+Use the *System/Activity Log* menu option to see what Agility is doing.
 
 ## Step 9
 
