@@ -122,7 +122,6 @@ sure you use the correct option below!:
 - If you pulled the pre-built Container in the previous step:
 
 ```console
-cd docker
 ./runContainer
 ```
 
