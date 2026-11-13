@@ -78,12 +78,53 @@ cd ~/agility
 It's a good idea to delete your existing Docker Container image to ensure there's no name clashes etc with the
 new one.
 
+First, remove the Agility Docker Container that was previously running.  If you remember, the *docker ps* 
+command showed it was named *agility*, so do this:
+
 ```console
 docker rm agility
+```
+
+Secondly, we need to remove the actual Docker image.  Its image name will depend on whether you had built the
+container yourself or had pulled the pre-built version from Docker Hub.  You can find out by running:
+
+```console
+docker images
+```
+
+You'll see something like this if you'd built it yourself:
+
+```console
+$ docker images
+REPOSITORY   TAG       IMAGE ID       CREATED        SIZE
+agility      latest    049c4afc93a1   2 months ago   1.54GB
+```
+
+...in which case the image name is *agility*.
+
+If you had pulled the pre-built one:
+
+```console
+$ docker images
+REPOSITORY   TAG       IMAGE ID       CREATED        SIZE
+rtweed/agility-arm64:latest   fd90f7add428       1.58GB
+```
+
+...in which case the image name is *rtweed/agility-arm64*.
+
+Now you can remove the image:
+
+```console
 docker rmi agility
 ```
 
-Note that this step is completely safe.  The Docker Container and its image are separate from your data.
+or:
+
+```console
+docker rmi rtweed/agility-arm64
+```
+
+Note that these steps are completely safe.  The Docker Container and its image are separate from your data.
 The latter is maintained within files in the */mapped* folder and its sub-folders.
 
 ## Step 7
